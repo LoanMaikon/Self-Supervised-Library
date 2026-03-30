@@ -1,0 +1,54 @@
+mode: simclr
+
+data:
+  datasets_path: /home/luan/Desktop/datasets/
+  train_dataset: imagenet
+  batch_size: 128 # For each device, so the effective batch size is batch_size * num_devices
+  crop_size: 224
+  num_workers: 2 # For each device, so the effective number of workers is num_workers * num_devices
+  prefetch_factor: 2
+  pin_memory: false
+  drop_last: true
+  crop_scale:
+    - 0.08
+    - 1.0
+  crop_ratio:
+    - 0.75
+    - 1.3333333333333333
+  color_jitter: true
+  gaussian_blur: true
+  horizontal_flip: true
+  normalize:
+    mean:
+      - 0.485
+      - 0.456
+      - 0.406
+    std:
+      - 0.229
+      - 0.224
+      - 0.225
+  separate_val_subset:
+    use: false
+    size: 0.1
+
+meta:
+  model_name: resnet50
+  checkpoint: false
+  projection_head_mode: non-linear
+  projection_dim: 128
+
+optimization:
+  num_epochs: 2
+  lr:
+    - 0.6
+    - 0.6
+    - 0.6
+  weight_decay:
+    - 1e-6
+    - 1e-6
+    - 1e-6
+  warmup_epochs: 1
+  optimizer: lars
+  temperature: 0.1
+  criterion: nt_xent
+  ipe_scale: 1.0

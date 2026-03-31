@@ -256,11 +256,6 @@ class ResNet(nn.Module):
             return self._forward_impl(x)
         else:
             return self._forward_impl_checkpoint(x)
-    
-    def save_weights(self, save_path, model_name):
-        if is_main_process():
-            os.makedirs(save_path + "models", exist_ok=True)
-            torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
 
 class ProjectionHead(nn.Module):
     def __init__(self, encoder_out_features, projection_dim):
@@ -304,11 +299,6 @@ class ProjectionHead(nn.Module):
             f"Failed to load weights from {weight_path}. "
             f"Tried: {errors}"
         )
-
-    def save_weights(self, save_path, model_name):
-        if is_main_process():
-            os.makedirs(save_path + "models", exist_ok=True)
-            torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
 
 def resnet50(use_checkpoint=None):
     return ResNet(Bottleneck, [3, 4, 6, 3], width_mult=1, use_checkpoint=use_checkpoint)

@@ -9,8 +9,8 @@ import copy
 import json
 import os
 
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json
 from .resnet import resnet50, mlp_head
 from src.byol_loss import byol_loss
 from src.imagenet import imagenet
@@ -88,10 +88,6 @@ class BYOL():
                     z_online = self.encoder_prediction_head(self.encoder_projection_head(self.encoder(concated)))
                     z_target = self.target_encoder_projection_head(self.target_encoder(concated))
 
-                    if self.world_size > 1:
-                        z_online = concat_all_gather(z_online)
-                        z_target = concat_all_gather(z_target)
-
                     loss = self.apply_criterion(z_online, z_target)
 
                 scaler.scale(loss).backward()
@@ -116,27 +112,7 @@ class BYOL():
             epoch_loss /= len(self.train_dataloader)
             train_loss.append(epoch_loss)
 
-            self.encoder.save_weights(
-                save_path=os.path.join(self.output_folder, "encoder.pth"),
-                model_name="encoder",
-            )
-            self.encoder_projection_head.save_weights(
-                save_path=os.path.join(self.output_folder, "projection_head.pth"),
-                model_name="projection_head",
-            )
-            self.encoder_prediction_head.save_weights(
-                save_path=os.path.join(self.output_folder, "prediction_head.pth"),
-                model_name="prediction_head",
-            )
-
-            self.target_encoder.save_weights(
-                save_path=os.path.join(self.output_folder, "encoder.pth"),
-                model_name="encoder",
-            )
-            self.target_encoder_projection_head.save_weights(
-                save_path=os.path.join(self.output_folder, "projection_head.pth"),
-                model_name="projection_head",
-            )
+            self.save_models()
 
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
@@ -145,6 +121,24 @@ class BYOL():
             plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
             plot_fig(range(len(emas)), "Iteration", emas, "EMA", f"ema", self.output_folder)
+
+    def save_models(self):
+        if not is_main_process():
+            return
+
+        encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
+        projection_head_state_dict = self.encoder_projection_head.module.state_dict() if self.world_size > 1 else self.encoder_projection_head.state_dict()
+        prediction_head_state_dict = self.encoder_prediction_head.module.state_dict() if self.world_size > 1 else self.encoder_prediction_head.state_dict()
+        target_encoder_state_dict = self.target_encoder.module.state_dict() if self.world_size > 1 else self.target_encoder.state_dict()
+        target_projection_head_state_dict = self.target_encoder_projection_head.module.state_dict() if self.world_size > 1 else self.target_encoder_projection_head.state_dict()
+
+        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
+
+        torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
+        torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))
+        torch.save(prediction_head_state_dict, os.path.join(self.output_folder, "models", "prediction_head.pth"))
+        torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", "target_encoder.pth"))
+        torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", "target_projection_head.pth"))
 
     def find_last_epoch(self):
         last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")
@@ -216,6 +210,12 @@ class BYOL():
                         'weight_decay': self.optimization_weight_decay[0],
                     },
                     {
+                        'params': (p for n, p in self.encoder_prediction_head.named_parameters()
+                                if ('bias' not in n) and (len(p.shape) != 1)),
+                        'layer_adaptation': True,
+                        'weight_decay': self.optimization_weight_decay[0],
+                    },
+                    {
                         'params': (p for n, p in self.encoder.named_parameters()
                                 if ('bias' in n) or (len(p.shape) == 1)),
                         'WD_exclude': True,
@@ -226,7 +226,13 @@ class BYOL():
                                 if ('bias' in n) or (len(p.shape) == 1)),
                         'WD_exclude': True,
                         'weight_decay': 0,
-                    }
+                    },
+                    {
+                        'params': (p for n, p in self.encoder_prediction_head.named_parameters()
+                                if ('bias' in n) or (len(p.shape) == 1)),
+                        'WD_exclude': True,
+                        'weight_decay': 0,
+                    },
                 ]
                 
                 self.base_optimizer = optim.SGD(param_groups, lr=self.optimization_lr[0], momentum=0.9)
@@ -347,14 +353,10 @@ class BYOL():
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
             self.encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_projection_head)
             self.encoder_prediction_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_prediction_head)
-            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
-            self.target_encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder_projection_head)
 
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.encoder_projection_head = DDP(self.encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
             self.encoder_prediction_head = DDP(self.encoder_prediction_head, device_ids=[self.rank], output_device=self.rank)
-            self.target_encoder = DDP(self.target_encoder, device_ids=[self.rank], output_device=self.rank)
-            self.target_encoder_projection_head = DDP(self.target_encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
 
         self.encoder.unfreeze_encoder()
         self.encoder_projection_head.unfreeze()

@@ -8,7 +8,7 @@ import torch
 import json
 import os
 
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, projection_head
 from src.imagenet import imagenet
@@ -105,14 +105,7 @@ class SimCLR():
             epoch_loss /= len(self.train_dataloader)
             train_loss.append(epoch_loss)
 
-            self.encoder.save_weights(
-                save_path=os.path.join(self.output_folder, "encoder.pth"),
-                model_name="encoder",
-            )
-            self.projection_head.save_weights(
-                save_path=os.path.join(self.output_folder, "projection_head.pth"),
-                model_name="projection_head",
-            )
+            self.save_models()
 
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
@@ -120,6 +113,18 @@ class SimCLR():
             plot_fig(range(len(train_loss)), "Epoch", train_loss, "Loss", f"loss", self.output_folder)
             plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
+
+    def save_models(self):
+        if not is_main_process():
+            return
+
+        encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
+        projection_head_state_dict = self.projection_head.module.state_dict() if self.world_size > 1 else self.projection_head.state_dict()
+
+        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
+
+        torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
+        torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))
 
     def find_last_epoch(self):
         last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")

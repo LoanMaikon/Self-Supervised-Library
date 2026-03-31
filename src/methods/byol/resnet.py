@@ -204,11 +204,6 @@ class ResNet(nn.Module):
                                 norm_layer=norm_layer))
 
         return nn.Sequential(*layers)
-    
-    def save_weights(self, save_path, model_name):
-        if is_main_process():
-            os.makedirs(save_path + "models", exist_ok=True)
-            torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
         
     def freeze_encoder(self):
         for param in self.parameters():
@@ -311,12 +306,6 @@ class MLPHead(nn.Module):
             f"Failed to load weights from {weight_path}. "
             f"Tried: {errors}"
         )
-
-    def save_weights(self, save_path, model_name):
-        if is_main_process():
-            os.makedirs(save_path + "models", exist_ok=True)
-            torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
-
 
 def _resnet(arch, block, layers, pretrained, progress, use_checkpoint, **kwargs):
     model = ResNet(block, layers, use_checkpoint, **kwargs)

@@ -15,6 +15,7 @@ import torch.distributed as dist
 
 from src.utils import is_main_process
 from src.methods.simclr.SimCLR import SimCLR
+from src.methods.byol.BYOL import BYOL
 
 class Model():
     def __init__(self,
@@ -69,7 +70,14 @@ class Model():
                 )
 
             case "byol":
-                pass
+                self.method = BYOL(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    continue_training=self.continue_training,
+                )
 
             case "ijepa":
                 pass

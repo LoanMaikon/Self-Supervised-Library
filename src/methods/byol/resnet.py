@@ -1,18 +1,44 @@
 '''
-This code is from https://github.com/tonylins/simclr-converter with some modifications
+Code from https://github.com/ajtejankar/byol-convert/blob/main/resnet.py
 '''
 
-import os
-import torch
+import torch.utils.checkpoint as checkpoint
+import torch.nn.functional as F
 import torch.nn as nn
+from math import ceil
+import torch
+import os
 
 from src.utils import is_main_process
 
+def calc_padding_same(in_height, in_width, strides, filter_height, filter_width):
+    out_height = ceil(float(in_height) / float(strides[0]))
+    out_width = ceil(float(in_width) / float(strides[1]))
+    pad_along_height = max((out_height - 1) * strides[0] + filter_height - in_height, 0)
+    pad_along_width = max((out_width - 1) * strides[1] + filter_width - in_width, 0)
+    pad_top = pad_along_height // 2
+    pad_bottom = pad_along_height - pad_top
+    pad_left = pad_along_width // 2
+    pad_right = pad_along_width - pad_left
+    return (pad_left, pad_right, pad_top, pad_bottom)
+
+def pad_same(inp, filt):
+    if isinstance(filt, nn.MaxPool2d):
+        filt_kernel = [filt.kernel_size]*2
+        filt_stride = [filt.stride]*2
+    else:
+        filt_kernel = filt.kernel_size
+        filt_stride = filt.stride
+    padding = calc_padding_same(*inp.shape[2:], filt_stride, *filt_kernel)
+    return F.pad(inp, padding)
+
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
+    """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=dilation, groups=groups, bias=False, dilation=dilation)
+                     padding=0, groups=groups, bias=False, dilation=dilation)
 
 def conv1x1(in_planes, out_planes, stride=1):
+    """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 class BasicBlock(nn.Module):
@@ -28,7 +54,7 @@ class BasicBlock(nn.Module):
             raise ValueError('BasicBlock only supports groups=1 and base_width=64')
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-
+        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = norm_layer(planes)
         self.relu = nn.ReLU(inplace=True)
@@ -55,7 +81,6 @@ class BasicBlock(nn.Module):
 
         return out
 
-
 class Bottleneck(nn.Module):
     expansion = 4
     __constants__ = ['downsample']
@@ -63,10 +88,10 @@ class Bottleneck(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
                  base_width=64, dilation=1, norm_layer=None):
         super(Bottleneck, self).__init__()
-        self.downsample = downsample
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         width = int(planes * (base_width / 64.)) * groups
+        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv1x1(inplanes, width)
         self.bn1 = norm_layer(width)
         self.conv2 = conv3x3(width, width, stride, groups, dilation)
@@ -74,24 +99,28 @@ class Bottleneck(nn.Module):
         self.conv3 = conv1x1(width, planes * self.expansion)
         self.bn3 = norm_layer(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
-
+        self.downsample = downsample
         self.stride = stride
 
     def forward(self, x):
         identity = x
 
-        out = self.conv1(x)
+        out = pad_same(x, self.conv1)
+        out = self.conv1(out)
         out = self.bn1(out)
         out = self.relu(out)
 
+        out = pad_same(out, self.conv2)
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
 
+        out = pad_same(out, self.conv3)
         out = self.conv3(out)
         out = self.bn3(out)
 
         if self.downsample is not None:
+            x = pad_same(x, self.downsample[0])
             identity = self.downsample(x)
 
         out += identity
@@ -100,40 +129,40 @@ class Bottleneck(nn.Module):
         return out
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
+    def __init__(self, block, layers, use_checkpoint, num_classes=1000, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None, width_mult=1, use_checkpoint=None):
-        
+                 norm_layer=None, width_multiplier=1):
         super(ResNet, self).__init__()
         self.use_checkpoint = use_checkpoint
-
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
-
-        self.inplanes = 64 * width_mult
+        self.inplanes = 64 * width_multiplier
+        dim_inner = 64 * width_multiplier
         self.dilation = 1
         if replace_stride_with_dilation is None:
+            # each element in the tuple indicates if we should replace
+            # the 2x2 stride with a dilated convolution instead
             replace_stride_with_dilation = [False, False, False]
         if len(replace_stride_with_dilation) != 3:
             raise ValueError("replace_stride_with_dilation should be None "
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=0,
                                bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64 * width_mult, layers[0])
-        self.layer2 = self._make_layer(block, 128 * width_mult, layers[1], stride=2,
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=0)
+        self.layer1 = self._make_layer(block, dim_inner, layers[0])
+        self.layer2 = self._make_layer(block, dim_inner * 2, layers[1], stride=2,
                                        dilate=replace_stride_with_dilation[0])
-        self.layer3 = self._make_layer(block, 256 * width_mult, layers[2], stride=2,
+        self.layer3 = self._make_layer(block, dim_inner * 4, layers[2], stride=2,
                                        dilate=replace_stride_with_dilation[1])
-        self.layer4 = self._make_layer(block, 512 * width_mult, layers[3], stride=2,
+        self.layer4 = self._make_layer(block, dim_inner * 8, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion * width_mult, num_classes)
+        self.fc = nn.Linear(width_multiplier* 512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -142,6 +171,9 @@ class ResNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
+        # Zero-initialize the last BN in each residual branch,
+        # so that the residual branch starts with zeros, and each residual block behaves like an identity.
+        # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
         if zero_init_residual:
             for m in self.modules():
                 if isinstance(m, Bottleneck):
@@ -173,54 +205,54 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
     
-    def remove_classifier_head(self):
-        self.fc = nn.Identity()
-    
-    def fit_classifier_head(self, num_classes):
-        self.fc = nn.Linear(self.fc.in_features, num_classes)
-
+    def save_weights(self, save_path, model_name):
+        if is_main_process():
+            os.makedirs(save_path + "models", exist_ok=True)
+            torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
+        
     def freeze_encoder(self):
         for param in self.parameters():
             param.requires_grad = False
         for param in self.fc.parameters():
             param.requires_grad = True
-        
+    
     def unfreeze_encoder(self):
         for param in self.parameters():
             param.requires_grad = True
     
-    def load_weights(self, weight_path, device):
-        checkpoint = torch.load(weight_path, map_location=device)
+    def remove_classifier_head(self):
+        self.fc = nn.Identity()
 
-        state_dict = checkpoint.get("state_dict", checkpoint)
-
-        errors = []
-
-        # classifier head 1000 classes
-        self.fit_classifier_head(num_classes=1000)
-        try:
-            self.load_state_dict(state_dict)
-            return
-        except Exception as e:
-            errors.append(("classifier_head_1000", str(e)))
-
-        # without classifier head
-        self.remove_classifier_head()
-        try:
-            self.load_state_dict(state_dict)
-            return
-        except Exception as e:
-            errors.append(("without_classifier_head", str(e)))
-        
-        raise ValueError(
-            f"Failed to load weights from {weight_path}. "
-            f"Tried: {errors}"
-        )
-
-    def _forward_impl(self, x):
+    def fith_classifier_head(self, num_classes):
+        self.fc = nn.Linear(self.fc.in_features, num_classes)
+    
+    def _forward_impl_checkpoint(self, x):
+        # See note [TorchScript super()]
+        x = pad_same(x, self.conv1)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+        x = pad_same(x, self.maxpool)
+        x = self.maxpool(x)
+
+        x = checkpoint.checkpoint(self.layer1, x)
+        x = checkpoint.checkpoint(self.layer2, x)
+        x = checkpoint.checkpoint(self.layer3, x)
+        x = checkpoint.checkpoint(self.layer4, x)
+
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
+
+        return x
+
+    def _forward_impl(self, x):
+        # See note [TorchScript super()]
+        x = pad_same(x, self.conv1)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = pad_same(x, self.maxpool)
         x = self.maxpool(x)
 
         x = self.layer1(x)
@@ -233,60 +265,35 @@ class ResNet(nn.Module):
         x = self.fc(x)
 
         return x
-    
-    def _forward_impl_checkpoint(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        x = torch.utils.checkpoint.checkpoint(self.layer1, x, use_reentrant=False)
-        x = torch.utils.checkpoint.checkpoint(self.layer2, x, use_reentrant=False)
-        x = torch.utils.checkpoint.checkpoint(self.layer3, x, use_reentrant=False)
-        x = torch.utils.checkpoint.checkpoint(self.layer4, x, use_reentrant=False)
-
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.fc(x)
-
-        return x
 
     def forward(self, x):
-        if not self.use_checkpoint:
-            return self._forward_impl(x)
-        else:
-            return self._forward_impl_checkpoint(x)
-    
-    def save_weights(self, save_path, model_name):
-        if is_main_process():
-            os.makedirs(save_path + "models", exist_ok=True)
-            torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
+        return self._forward_impl(x) if not self.use_checkpoint else self._forward_impl_checkpoint(x)
 
-class ProjectionHead(nn.Module):
-    def __init__(self, encoder_out_features, projection_dim):
-        super(ProjectionHead, self).__init__()
+class MLPHead(nn.Module):
+    def __init__(self, in_dim, hidden_dim=4096, out_dim=256):
+        super(MLPHead, self).__init__()
 
-        self.encoder_out_features = encoder_out_features
-        self.projection_dim = projection_dim
+        self.in_dim = in_dim
+        self.hidden_dim = hidden_dim
+        self.out_dim = out_dim
 
         self.projection_head = nn.Sequential(
-            nn.Linear(self.encoder_out_features, self.encoder_out_features),
-            nn.BatchNorm1d(self.encoder_out_features),
+            nn.Linear(in_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(inplace=True),
-            nn.Linear(self.encoder_out_features, self.projection_dim),
-            nn.BatchNorm1d(self.projection_dim),
+            nn.Linear(hidden_dim, out_dim)
         )
-    
-    def unfreeze(self):
-        for param in self.parameters():
-            param.requires_grad = True
+
+    def forward(self, x):
+        return self.projection_head(x)
 
     def freeze(self):
         for param in self.parameters():
             param.requires_grad = False
 
-    def forward(self, x):
-        return self.projection_head(x)
+    def unfreeze(self):
+        for param in self.parameters():
+            param.requires_grad = True
     
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)
@@ -310,8 +317,32 @@ class ProjectionHead(nn.Module):
             os.makedirs(save_path + "models", exist_ok=True)
             torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
 
-def resnet50(use_checkpoint=None):
-    return ResNet(Bottleneck, [3, 4, 6, 3], width_mult=1, use_checkpoint=use_checkpoint)
 
-def projection_head(encoder_out_features, projection_dim):
-    return ProjectionHead(encoder_out_features, projection_dim)
+def _resnet(arch, block, layers, pretrained, progress, use_checkpoint, **kwargs):
+    model = ResNet(block, layers, use_checkpoint, **kwargs)
+    return model
+
+def resnet50(pretrained=False, progress=True, use_checkpoint=False, **kwargs):
+    r"""ResNet-50 model from
+    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress, use_checkpoint,
+                   **kwargs)
+
+def resnet200(pretrained=False, progress=True, use_checkpoint=False, **kwargs):
+    r"""ResNet-200 2x model from BYOL
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    kwargs['width_multiplier'] = 2
+    return _resnet('resnet200', Bottleneck, [3, 24, 36, 3], pretrained, progress, use_checkpoint,
+                   **kwargs)
+
+def mlp_head(in_dim, hidden_dim=4096, out_dim=256):
+    return MLPHead(in_dim, hidden_dim, out_dim)

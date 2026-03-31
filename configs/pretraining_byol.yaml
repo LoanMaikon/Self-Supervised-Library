@@ -1,7 +1,7 @@
-mode: simclr
+mode: byol
 
 data:
-  datasets_path: /disk2/lmk22/datasets
+  datasets_path: /home/luan/Desktop/datasets
   train_dataset: imagenet
   batch_size: 32 # For each device, so the effective batch size is batch_size * num_devices
   crop_size: 224
@@ -34,7 +34,8 @@ data:
 meta:
   model_name: resnet50
   checkpoint: false
-  projection_dim: 128
+  projection_hidden_dim: 4096
+  projection_dim: 256
 
 optimization:
   num_epochs: 3
@@ -46,8 +47,10 @@ optimization:
     - 1e-5
     - 1e-6
     - 1e-5
+  ema:
+    - 0.996
+    - 1.0
   warmup_epochs: 1
   optimizer: lars
-  temperature: 0.1
-  criterion: nt_xent
+  criterion: byol_loss
   ipe_scale: 1.0

@@ -1,25 +1,19 @@
-from torchvision.transforms import v2
-import torch
-import yaml
-import torch.nn as nn
-import torch.optim as optim
-import shutil
-import os
-from time import strftime, localtime
-import json
-import copy
-import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
-import torch.distributed as dist
 from torch.distributed.nn.functional import all_gather
+from torchvision.transforms import v2
+import torch.distributed as dist
+import torch.optim as optim
+import torch
+import json
+import os
 
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json
+from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, projection_head
 from src.imagenet import imagenet
 from src.nt_xent import nt_xent
 from src.lars import LARS
-from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json
 
 def concat_all_gather(tensor):
     if not dist.is_available() or not dist.is_initialized():
@@ -56,7 +50,7 @@ class SimCLR():
             self.last_epoch = self.find_last_epoch()
             self.step_schedulers_to_epoch(self.last_epoch)
 
-            print(f"Continuing training from epoch {self.last_epoch}...")
+            write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
     def train(self):
         write_on_log("Starting training...", self.output_folder)
@@ -96,16 +90,17 @@ class SimCLR():
                 scaler.scale(loss).backward()
                 scaler.step(self.optimizer)
                 scaler.update()
-                new_lr = self.lr_scheduler.step()
-                new_wd = self.wd_scheduler.step()
 
                 loss_value = loss.item()
-
                 epoch_loss += loss_value
-                lrs.append(new_lr)
-                wds.append(new_wd)
+
+                lrs.append(self.lr_scheduler.get_value())
+                wds.append(self.wd_scheduler.get_value())
 
                 write_on_csv(self.output_folder, epoch, iteration, loss_value, lrs[-1], wds[-1])
+
+                self.lr_scheduler.step()
+                self.wd_scheduler.step()
             
             epoch_loss /= len(self.train_dataloader)
             train_loss.append(epoch_loss)
@@ -283,6 +278,9 @@ class SimCLR():
         # Removing classifier head from ResNet if it exists
         self.encoder.remove_classifier_head()
 
+        self.encoder.unfreeze_encoder()
+        self.projection_head.unfreeze()
+
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
             self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
@@ -314,7 +312,6 @@ class SimCLR():
 
         self.meta_model_name = str(self.config["meta"]["model_name"])
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
-        self.meta_projection_head_mode = str(self.config["meta"]["projection_head_mode"])
         self.meta_projection_dim = int(self.config["meta"]["projection_dim"])
 
         self.optimization_num_epochs = int(self.config["optimization"]["num_epochs"])
@@ -325,3 +322,5 @@ class SimCLR():
         self.optimization_temperature = float(self.config["optimization"]["temperature"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
+
+        self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

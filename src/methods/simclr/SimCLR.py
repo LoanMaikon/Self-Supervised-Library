@@ -280,6 +280,9 @@ class SimCLR():
                 device=self.device
             )
 
+        self.encoder = self.encoder.to(self.device)
+        self.projection_head = self.projection_head.to(self.device)
+
         # Removing classifier head from ResNet if it exists
         self.encoder.remove_classifier_head()
 
@@ -292,9 +295,6 @@ class SimCLR():
 
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
-        
-        self.encoder = self.encoder.to(self.device)
-        self.projection_head = self.projection_head.to(self.device)
 
     def _load_config(self):
         self.data_datasets_path = str(self.config["data"]["datasets_path"])

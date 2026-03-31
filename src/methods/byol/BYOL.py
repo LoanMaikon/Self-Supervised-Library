@@ -345,9 +345,22 @@ class BYOL():
                 device=self.device
             )
 
+        self.encoder = self.encoder.to(self.device)
+        self.encoder_projection_head = self.encoder_projection_head.to(self.device)
+        self.encoder_prediction_head = self.encoder_prediction_head.to(self.device)
+        self.target_encoder = self.target_encoder.to(self.device)
+        self.target_encoder_projection_head = self.target_encoder_projection_head.to(self.device)
+
         # Removing classifier head from ResNet if it exists
         self.encoder.remove_classifier_head()
         self.target_encoder.remove_classifier_head()
+
+        self.encoder.unfreeze_encoder()
+        self.encoder_projection_head.unfreeze()
+        self.encoder_prediction_head.unfreeze()
+        
+        self.target_encoder.freeze_encoder()
+        self.target_encoder_projection_head.freeze()
 
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
@@ -357,19 +370,6 @@ class BYOL():
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.encoder_projection_head = DDP(self.encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
             self.encoder_prediction_head = DDP(self.encoder_prediction_head, device_ids=[self.rank], output_device=self.rank)
-
-        self.encoder.unfreeze_encoder()
-        self.encoder_projection_head.unfreeze()
-        self.encoder_prediction_head.unfreeze()
-        
-        self.target_encoder.freeze_encoder()
-        self.target_encoder_projection_head.freeze()
-        
-        self.encoder = self.encoder.to(self.device)
-        self.encoder_projection_head = self.encoder_projection_head.to(self.device)
-        self.encoder_prediction_head = self.encoder_prediction_head.to(self.device)
-        self.target_encoder = self.target_encoder.to(self.device)
-        self.target_encoder_projection_head = self.target_encoder_projection_head.to(self.device)
 
     def _load_config(self):
         self.data_datasets_path = str(self.config["data"]["datasets_path"])

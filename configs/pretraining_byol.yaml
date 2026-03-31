@@ -1,9 +1,9 @@
 mode: byol
 
 data:
-  datasets_path: /home/luan/Desktop/datasets
+  datasets_path: /disk2/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 32 # For each device, so the effective batch size is batch_size * num_devices
+  batch_size: 16 # For each device, so the effective batch size is batch_size * num_devices
   crop_size: 224
   num_workers: 2 # For each device, so the effective number of workers is num_workers * num_devices
   prefetch_factor: 2
@@ -41,12 +41,12 @@ optimization:
   num_epochs: 3
   lr:
     - 0.01
-    - 0.5
-    - 0.001
+    - 0.1
+    - 0.01
   weight_decay:
-    - 1e-5
     - 1e-6
     - 1e-5
+    - 1e-6
   ema:
     - 0.996
     - 1.0

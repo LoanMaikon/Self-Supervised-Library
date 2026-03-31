@@ -71,5 +71,5 @@ if __name__ == "__main__":
     main()
 
 '''
-nohup torchrun --nproc_per_node=2 main.py --config configs/pretraining_simclr.yaml --devices cuda:0 cuda:1 --output_path ../test_output &
+nohup torchrun --nproc_per_node=2 main.py --config configs/pretraining_simclr.yaml --devices cuda:0 cuda:1 --output_folder ../test_output &
 '''

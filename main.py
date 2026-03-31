@@ -26,7 +26,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="SSL Library")
 
     parser.add_argument("--config", type=str, required=True, help="Path to the configuration file in configs/.")
-    parser.add_argument("--devices", type=str, required=True, nargs="+", help="Devices (e.g., cuda:0, cuda:1, cpu).")
+    parser.add_argument("--devices", type=str, required=True, nargs="+", help="Devices (e.g., cuda:0, cuda:1).")
     parser.add_argument("--output_folder", type=str, required=True, help="Directory to save outputs.")
     parser.add_argument("--continue_training", action="store_true", help="Whether to continue training from the last checkpoint in the output folder.")
     
@@ -44,6 +44,8 @@ def get_args():
     if not is_distributed():
         device_str = str(args.devices[0])
         os.environ["CUDA_VISIBLE_DEVICES"] = device_str.replace("cuda:", "")
+
+    args.output_folder += "/" if not args.output_folder.endswith("/") else ""
 
     return args
 
@@ -67,3 +69,7 @@ def cleanup_distributed():
 
 if __name__ == "__main__":
     main()
+
+'''
+nohup torchrun --nproc_per_node=2 main.py --config configs/pretraining_simclr.yaml --devices cuda:0 cuda:1 --output_path ../test_output &
+'''

@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
+from torch.distributed.nn.functional import all_gather
 
 from .resnet import resnet50, projection_head
 from src.imagenet import imagenet
@@ -19,6 +20,12 @@ from src.nt_xent import nt_xent
 from src.lars import LARS
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json
+
+def concat_all_gather(tensor):
+    if not dist.is_available() or not dist.is_initialized():
+        return tensor
+
+    return torch.cat(all_gather(tensor), dim=0)
 
 class SimCLR():
     def __init__(self,
@@ -49,6 +56,8 @@ class SimCLR():
             self.last_epoch = self.find_last_epoch()
             self.step_schedulers_to_epoch(self.last_epoch)
 
+            print(f"Continuing training from epoch {self.last_epoch}...")
+
     def train(self):
         write_on_log("Starting training...", self.output_folder)
         scaler = torch.amp.GradScaler()
@@ -70,11 +79,17 @@ class SimCLR():
             epoch_loss = 0.0
 
             for iteration, (x1, x2) in enumerate(self.train_dataloader):
+                self.optimizer.zero_grad()
+
                 x1, x2 = x1.to(self.device, non_blocking=True), x2.to(self.device, non_blocking=True)
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     z1 = self.projection_head(self.encoder(x1))
                     z2 = self.projection_head(self.encoder(x2))
+
+                    if self.world_size > 1:
+                        z1 = concat_all_gather(z1)
+                        z2 = concat_all_gather(z2)
 
                     loss = self.apply_criterion(z1, z2)
 
@@ -84,14 +99,13 @@ class SimCLR():
                 new_lr = self.lr_scheduler.step()
                 new_wd = self.wd_scheduler.step()
 
-                loss += loss.item()
-                epoch_loss += loss.item()
+                loss_value = loss.item()
+
+                epoch_loss += loss_value
                 lrs.append(new_lr)
                 wds.append(new_wd)
 
-                self.optimizer.zero_grad()
-
-                write_on_csv(self.output_folder, epoch, iteration, loss, lrs[-1], wds[-1])
+                write_on_csv(self.output_folder, epoch, iteration, loss_value, lrs[-1], wds[-1])
             
             epoch_loss /= len(self.train_dataloader)
             train_loss.append(epoch_loss)
@@ -258,16 +272,23 @@ class SimCLR():
         
         if self.continue_training:
             self.encoder.load_weights(
-                weight_path=os.path.join(self.weights_folder, "encoder.pth"),
+                weight_path=os.path.join(self.output_folder, "models", "encoder.pth"),
                 device=self.device
             )
             self.projection_head.load_weights(
-                weight_path=os.path.join(self.weights_folder, "projection_head.pth"),
+                weight_path=os.path.join(self.output_folder, "models", "projection_head.pth"),
                 device=self.device
             )
 
         # Removing classifier head from ResNet if it exists
         self.encoder.remove_classifier_head()
+
+        if self.world_size > 1:
+            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
+
+            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
         
         self.encoder = self.encoder.to(self.device)
         self.projection_head = self.projection_head.to(self.device)

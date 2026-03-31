@@ -4,13 +4,13 @@ import json
 import os
 
 def write_on_log(text, output_path):
-        if not is_main_process():
-            return
-    
-        time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())
-        mode = "w" if not os.path.exists(os.path.join(output_path, "log.txt")) else "a"
-        with open(os.path.join(output_path, "log.txt"), mode) as file:
-            file.write(time + text + "\n")
+    if not is_main_process():
+        return
+
+    time = strftime("%Y-%m-%d %H:%M:%S - ", localtime())
+    mode = "w" if not os.path.exists(os.path.join(output_path, "log.txt")) else "a"
+    with open(os.path.join(output_path, "log.txt"), mode) as file:
+        file.write(time + text + "\n")
 
 def write_on_csv(output_path, epoch, iteration, loss, lr, wd):
     if not is_main_process():
@@ -44,5 +44,6 @@ def plot_fig(x, x_name, y, y_name, fig_name, output_path):
     plt.close()
 
 def save_json(data, output_path, file_name):
-    with open(os.path.join(output_path, f"{file_name}.json"), "w") as f:
-        json.dump(data, f, indent=4)
+    if is_main_process():
+        with open(os.path.join(output_path, f"{file_name}.json"), "w") as f:
+            json.dump(data, f, indent=4)

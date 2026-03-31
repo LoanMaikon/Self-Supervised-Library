@@ -2,8 +2,11 @@
 This code is from https://github.com/tonylins/simclr-converter with some modifications
 '''
 
+import os
 import torch
 import torch.nn as nn
+
+from src.utils import is_main_process
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
@@ -255,7 +258,9 @@ class ResNet(nn.Module):
             return self._forward_impl_checkpoint(x)
     
     def save_weights(self, save_path, model_name):
-        torch.save(self.state_dict(), f"{save_path}/{model_name}.pth")
+        if is_main_process():
+            os.makedirs(save_path + "models", exist_ok=True)
+            torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
 
 class ProjectionHead(nn.Module):
     def __init__(self, encoder_out_features, projection_dim):
@@ -293,7 +298,9 @@ class ProjectionHead(nn.Module):
         )
 
     def save_weights(self, save_path, model_name):
-        torch.save(self.state_dict(), f"{save_path}/{model_name}.pth")
+        if is_main_process():
+            os.makedirs(save_path + "models", exist_ok=True)
+            torch.save(self.state_dict(), f"{save_path}/models/{model_name}.pth")
 
 def resnet50(use_checkpoint=None):
     return ResNet(Bottleneck, [3, 4, 6, 3], width_mult=1, use_checkpoint=use_checkpoint)

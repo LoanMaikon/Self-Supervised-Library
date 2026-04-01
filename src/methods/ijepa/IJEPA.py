@@ -120,6 +120,8 @@ class IJEPA():
         if not is_main_process():
             return
         
+        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
+        
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
         predictor_state_dict = self.predictor.module.state_dict() if self.world_size > 1 else self.predictor.state_dict()
         target_encoder_state_dict = self.target_encoder.state_dict()

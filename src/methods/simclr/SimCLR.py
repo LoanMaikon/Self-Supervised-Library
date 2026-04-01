@@ -108,11 +108,11 @@ class SimCLR():
     def save_models(self, epoch):
         if not is_main_process():
             return
+    
+        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
 
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
         projection_head_state_dict = self.projection_head.module.state_dict() if self.world_size > 1 else self.projection_head.state_dict()
-
-        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))

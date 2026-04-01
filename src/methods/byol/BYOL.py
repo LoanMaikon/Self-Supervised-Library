@@ -111,14 +111,14 @@ class BYOL():
     def save_models(self, epoch):
         if not is_main_process():
             return
+    
+        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
 
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
         projection_head_state_dict = self.encoder_projection_head.module.state_dict() if self.world_size > 1 else self.encoder_projection_head.state_dict()
         prediction_head_state_dict = self.encoder_prediction_head.module.state_dict() if self.world_size > 1 else self.encoder_prediction_head.state_dict()
         target_encoder_state_dict = self.target_encoder.state_dict()
         target_projection_head_state_dict = self.target_encoder_projection_head.state_dict()
-
-        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))

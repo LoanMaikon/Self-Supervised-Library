@@ -15,7 +15,7 @@ def main():
         output_folder=args.output_folder,
         rank=local_rank,
         world_size=world_size,
-        evaluate_checkpoint=args.evaluate_weights,
+        evaluate_weights=args.evaluate_weights if args.evaluate_weights else None,
         continue_training=args.continue_training,
     )
 

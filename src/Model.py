@@ -3,7 +3,7 @@ import torch
 import yaml
 import os
 
-
+from src.methods.evaluation.Evaluation import Evaluation
 from src.methods.simclr.SimCLR import SimCLR
 from src.methods.ijepa.IJEPA import IJEPA
 from src.methods.byol.BYOL import BYOL
@@ -15,6 +15,7 @@ class Model():
                  output_folder,
                  rank,
                  world_size,
+                 evaluate_weights,
                  continue_training,
                 ):
         
@@ -22,6 +23,7 @@ class Model():
         self.output_folder = output_folder
         self.rank = rank
         self.world_size = world_size
+        self.evaluate_weights = evaluate_weights
         self.continue_training = continue_training
 
         self._load_device()
@@ -30,6 +32,12 @@ class Model():
     
     def train(self):
         self.method.train()
+    
+    def test(self):
+        self.method.test()
+
+    def is_evaluating(self):
+        return self.mode == "evaluate"
 
     def _create_output_folder(self):
         if is_main_process():
@@ -49,12 +57,22 @@ class Model():
         
         self.mode = self.config["mode"]
 
+        if self.mode == "evaluate" and not os.path.exists(self.evaluate_weights):
+            raise ValueError(f"Checkpoint file '{self.evaluate_weights}' does not exist for evaluation.")
+        if self.mode != "evaluate" and self.evaluate_weights is not None:
+            raise ValueError(f"--evaluate_weights should not be passed when mode is not 'evaluate'.")
+
         match self.mode:
-            case "linear_evaluation":
-                pass
-            
-            case "fine_tuning":
-                pass
+            case "evaluate":
+                self.method = Evaluation(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    evaluate_weights=self.evaluate_weights,
+                    continue_training=self.continue_training,
+                )
 
             case "simclr":
                 self.method = SimCLR(

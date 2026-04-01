@@ -42,6 +42,7 @@ meta:
   predictor_depth: 6
   predictor_emb_dim: 384
   predictor_num_heads: 3
+  pretrained_weights: null
 
 optimization:
   ipe_scale: 1.0
@@ -55,7 +56,7 @@ optimization:
   weight_decay:
   - 0.04
   - 0.4
-  epochs: 300
-  warmup_epochs: 15
+  epochs: 3
+  warmup_epochs: 1
   optimizer: adamw
   criterion: mse_loss

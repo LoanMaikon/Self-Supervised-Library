@@ -36,9 +36,10 @@ meta:
   checkpoint: false
   projection_hidden_dim: 4096
   projection_dim: 256
+  pretrained_weights: null
 
 optimization:
-  num_epochs: 3
+  ipe_scale: 1.0
   lr:
     - 0.01
     - 0.1
@@ -50,7 +51,7 @@ optimization:
   ema:
     - 0.996
     - 1.0
+  num_epochs: 3
   warmup_epochs: 1
   optimizer: lars
   criterion: byol_loss
-  ipe_scale: 1.0

@@ -15,10 +15,14 @@ def main():
         output_folder=args.output_folder,
         rank=local_rank,
         world_size=world_size,
+        evaluate_checkpoint=args.evaluate_weights,
         continue_training=args.continue_training,
     )
 
     model.train()
+
+    if model.is_evaluating():
+        model.test()
     
     cleanup_distributed()
 
@@ -28,6 +32,7 @@ def get_args():
     parser.add_argument("--config", type=str, required=True, help="Path to the configuration file in configs/.")
     parser.add_argument("--devices", type=str, required=True, nargs="+", help="Devices (e.g., cuda:0, cuda:1).")
     parser.add_argument("--output_folder", type=str, required=True, help="Directory to save outputs.")
+    parser.add_argument("--evaluate_weights", type=str, required=False, help="Path to the checkpoint for evaluation if evaluation is being performed.")
     parser.add_argument("--continue_training", action="store_true", help="Whether to continue training from the last checkpoint in the output folder.")
     
     args = parser.parse_args()

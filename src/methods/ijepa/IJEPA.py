@@ -116,7 +116,7 @@ class IJEPA():
             plot_fig(range(len(emas)), "Iteration", emas, "EMA", f"ema", self.output_folder)
 
     def save_models(self):
-        if not is_main_process(self.rank):
+        if not is_main_process():
             return
         
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
@@ -299,6 +299,15 @@ class IJEPA():
         self.target_encoder = copy.deepcopy(self.encoder)
         self.target_encoder.checkpoint = False # Target model should not use checkpointing
 
+        if self.meta_pretrained_weights is not None:
+            if os.path.exists(self.meta_pretrained_weights):
+                self.encoder.load_weights(
+                    weight_path=self.meta_pretrained_weights,
+                    device=self.device
+                )
+            else:
+                raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
+
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
                 self.encoder.load_weights(os.path.join(self.output_folder, "models", "encoder.pth"), device=self.device)
@@ -352,6 +361,7 @@ class IJEPA():
         self.meta_predictor_depth = int(self.config["meta"]["predictor_depth"])
         self.meta_predictor_emb_dim = int(self.config["meta"]["predictor_emb_dim"])
         self.meta_predictor_num_heads = int(self.config["meta"]["predictor_num_heads"])
+        self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
 
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
         self.optimization_ema = list(map(float, self.config["optimization"]["ema"]))

@@ -259,6 +259,15 @@ class SimCLR():
             case _:
                 raise ValueError(f"Unsupported model name: {self.meta_model_name}")
         
+        if self.meta_pretrained_weights is not None:
+            if os.path.exists(self.meta_pretrained_weights):
+                self.encoder.load_weights(
+                    weight_path=self.meta_pretrained_weights,
+                    device=self.device
+                )
+            else:
+                raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
+        
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
                 self.encoder.load_weights(
@@ -313,6 +322,7 @@ class SimCLR():
         self.meta_model_name = str(self.config["meta"]["model_name"])
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
         self.meta_projection_dim = int(self.config["meta"]["projection_dim"])
+        self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
 
         self.optimization_num_epochs = int(self.config["optimization"]["num_epochs"])
         self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))

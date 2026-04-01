@@ -1,4 +1,4 @@
-mode: simclr
+mode: evaluate
 
 data:
   datasets_path: /disk2/lmk22/datasets
@@ -9,15 +9,6 @@ data:
   prefetch_factor: 2
   pin_memory: false
   drop_last: true
-  crop_scale:
-    - 0.08
-    - 1.0
-  crop_ratio:
-    - 0.75
-    - 1.3333333333333333
-  color_jitter: true
-  gaussian_blur: true
-  horizontal_flip: true
   normalize:
     mean:
       - 0.485
@@ -30,25 +21,22 @@ data:
   separate_val_subset:
     use: false
     size: 0.1
-
+  
 meta:
-  model_name: resnet50
   checkpoint: false
-  projection_dim: 128
+  mode: linear_eval
   pretrained_weights: null
 
 optimization:
   ipe_scale: 1.0
   lr:
-    - 0.001
-    - 0.01
-    - 0.001
+  - 0.01
+  - 0.01
+  - 0.01
   weight_decay:
-    - 1e-6
-    - 1e-5
-    - 1e-6
-  num_epochs: 3
+  - 0.04
+  - 0.4
+  epochs: 3
   warmup_epochs: 1
-  optimizer: lars
-  temperature: 0.1
-  criterion: nt_xent
+  optimizer: sgd
+  criterion: cross_entropy

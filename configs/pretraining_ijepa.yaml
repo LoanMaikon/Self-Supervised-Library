@@ -42,7 +42,8 @@ meta:
   predictor_depth: 6
   predictor_emb_dim: 384
   predictor_num_heads: 3
-  pretrained_weights: null
+  pretrained_weights: null # Path to the pretrained weights file. Set to null if you don't want to load pretrained weights.
+  save_every: 1 # Set to 0 if you don't want to save intermediate checkpoints during training
 
 optimization:
   ipe_scale: 1.0

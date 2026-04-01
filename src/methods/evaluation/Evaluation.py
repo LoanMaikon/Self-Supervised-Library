@@ -103,6 +103,7 @@ class Evaluation():
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
         self.meta_mode = str(self.config["meta"]["mode"])
         self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
+        self.meta_save_every = int(self.config["meta"]["save_every"])
 
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
         self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))

@@ -105,7 +105,7 @@ class IJEPA():
             epoch_loss /= len(self.train_dataloader)
             train_loss.append(epoch_loss)
 
-            self.save_models()
+            self.save_models(epoch)
 
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
@@ -115,7 +115,7 @@ class IJEPA():
             plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
             plot_fig(range(len(emas)), "Iteration", emas, "EMA", f"ema", self.output_folder)
 
-    def save_models(self):
+    def save_models(self, epoch):
         if not is_main_process():
             return
         
@@ -126,6 +126,11 @@ class IJEPA():
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "encoder.pth"))
         torch.save(predictor_state_dict, os.path.join(self.output_folder, "predictor.pth"))
         torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "target_encoder.pth"))
+
+        if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
+            torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
+            torch.save(predictor_state_dict, os.path.join(self.output_folder, "models", f"predictor_epoch_{epoch}.pth"))
+            torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder_epoch_{epoch}.pth"))
 
     def find_last_epoch(self):
         last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")
@@ -362,6 +367,7 @@ class IJEPA():
         self.meta_predictor_emb_dim = int(self.config["meta"]["predictor_emb_dim"])
         self.meta_predictor_num_heads = int(self.config["meta"]["predictor_num_heads"])
         self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
+        self.meta_save_every = int(self.config["meta"]["save_every"])
 
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
         self.optimization_ema = list(map(float, self.config["optimization"]["ema"]))

@@ -94,7 +94,7 @@ class SimCLR():
             epoch_loss /= len(self.train_dataloader)
             train_loss.append(epoch_loss)
 
-            self.save_models()
+            self.save_models(epoch)
 
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
@@ -103,7 +103,7 @@ class SimCLR():
             plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
 
-    def save_models(self):
+    def save_models(self, epoch):
         if not is_main_process():
             return
 
@@ -114,6 +114,10 @@ class SimCLR():
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))
+
+        if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
+            torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
+            torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head_epoch_{epoch}.pth"))
 
     def find_last_epoch(self):
         last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")
@@ -323,6 +327,7 @@ class SimCLR():
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
         self.meta_projection_dim = int(self.config["meta"]["projection_dim"])
         self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
+        self.meta_save_every = int(self.config["meta"]["save_every"])
 
         self.optimization_num_epochs = int(self.config["optimization"]["num_epochs"])
         self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))

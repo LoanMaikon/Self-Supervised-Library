@@ -309,26 +309,29 @@ class BYOL():
                 raise ValueError(f"Unsupported model name: {self.meta_model_name}")
         
         if self.continue_training:
-            self.encoder.load_weights(
-                weight_path=os.path.join(self.output_folder, "models", "encoder.pth"),
-                device=self.device
-            )
-            self.encoder_projection_head.load_weights(
-                weight_path=os.path.join(self.output_folder, "models", "projection_head.pth"),
-                device=self.device
-            )
-            self.encoder_prediction_head.load_weights(
-                weight_path=os.path.join(self.output_folder, "models", "prediction_head.pth"),
-                device=self.device
-            )
-            self.target_encoder.load_weights(
-                weight_path=os.path.join(self.output_folder, "models", "encoder.pth"),
-                device=self.device
-            )
-            self.target_encoder_projection_head.load_weights(
-                weight_path=os.path.join(self.output_folder, "models", "projection_head.pth"),
-                device=self.device
-            )
+            if os.path.exists(os.path.join(self.output_folder, "models")):
+                self.encoder.load_weights(
+                    weight_path=os.path.join(self.output_folder, "models", "encoder.pth"),
+                    device=self.device
+                )
+                self.encoder_projection_head.load_weights(
+                    weight_path=os.path.join(self.output_folder, "models", "projection_head.pth"),
+                    device=self.device
+                )
+                self.encoder_prediction_head.load_weights(
+                    weight_path=os.path.join(self.output_folder, "models", "prediction_head.pth"),
+                    device=self.device
+                )
+                self.target_encoder.load_weights(
+                    weight_path=os.path.join(self.output_folder, "models", "encoder.pth"),
+                    device=self.device
+                )
+                self.target_encoder_projection_head.load_weights(
+                    weight_path=os.path.join(self.output_folder, "models", "projection_head.pth"),
+                    device=self.device
+                )
+            else:
+                raise FileNotFoundError("Checkpoint files not found for continuing training.")
 
         self.encoder = self.encoder.to(self.device)
         self.encoder_projection_head = self.encoder_projection_head.to(self.device)

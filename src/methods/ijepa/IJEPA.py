@@ -300,9 +300,12 @@ class IJEPA():
         self.target_encoder.checkpoint = False # Target model should not use checkpointing
 
         if self.continue_training:
-            self.encoder.load_weights(os.path.join(self.output_folder, "encoder.pth"), device=self.device)
-            self.predictor.load_weights(os.path.join(self.output_folder, "predictor.pth"), device=self.device)
-            self.target_encoder.load_weights(os.path.join(self.output_folder, "target_encoder.pth"), device=self.device)
+            if os.path.exists(os.path.join(self.output_folder, "models")):
+                self.encoder.load_weights(os.path.join(self.output_folder, "models", "encoder.pth"), device=self.device)
+                self.predictor.load_weights(os.path.join(self.output_folder, "models", "predictor.pth"), device=self.device)
+                self.target_encoder.load_weights(os.path.join(self.output_folder, "models", "target_encoder.pth"), device=self.device)
+            else:
+                raise FileNotFoundError("Checkpoint files not found for continuing training.")
 
         self.encoder.unfreeze()
         self.predictor.unfreeze()

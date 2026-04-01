@@ -1,22 +1,13 @@
-from torchvision.transforms import v2
+import shutil
 import torch
 import yaml
-import torch.nn as nn
-import torch.optim as optim
-import shutil
 import os
-from time import strftime, localtime
-import json
-import copy
-import torch.nn.functional as F
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data.distributed import DistributedSampler
-import torch.distributed as dist
 
-from src.utils import is_main_process
+
 from src.methods.simclr.SimCLR import SimCLR
 from src.methods.ijepa.IJEPA import IJEPA
 from src.methods.byol.BYOL import BYOL
+from src.utils import is_main_process
 
 class Model():
     def __init__(self,
@@ -42,7 +33,12 @@ class Model():
 
     def _create_output_folder(self):
         if is_main_process():
-            os.makedirs(self.output_folder, exist_ok=False)
+            if self.continue_training:
+                os.makedirs(self.output_folder, exist_ok=True)
+            else:
+                os.makedirs(self.output_folder, exist_ok=False)
+            
+            shutil.copy(self.config, os.path.join(self.output_folder, "config.yaml"))
 
     def _load_device(self):
         self.device = torch.device(f"cuda:{self.rank}" if torch.cuda.is_available() else "cpu")

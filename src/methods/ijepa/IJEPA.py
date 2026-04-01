@@ -41,8 +41,9 @@ class IJEPA():
         self._load_schedulers()
 
         if self.continue_training:
-            self.last_epoch = self.find_last_epoch()
-            self.step_schedulers_to_epoch(self.last_epoch)
+            self.last_epoch = self._find_last_epoch()
+            self._step_schedulers_to_epoch(self.last_epoch)
+            self.train_loss_values = self._get_train_loss_values()
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
@@ -50,10 +51,10 @@ class IJEPA():
         write_on_log("Starting training...", self.output_folder)
         scaler = torch.amp.GradScaler()
 
-        train_loss = []
-        lrs = []
-        wds = []
-        emas = []
+        train_loss = [] if not self.continue_training else self.train_loss_values
+        lrs = [] if not self.continue_training else self.lr_values
+        wds = [] if not self.continue_training else self.wd_values
+        emas = [] if not self.continue_training else self.ema_values
 
         for epoch in range(1, self.optimization_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
@@ -121,7 +122,7 @@ class IJEPA():
         
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
         predictor_state_dict = self.predictor.module.state_dict() if self.world_size > 1 else self.predictor.state_dict()
-        target_encoder_state_dict = self.target_encoder.module.state_dict() if self.world_size > 1 else self.target_encoder.state_dict()
+        target_encoder_state_dict = self.target_encoder.state_dict()
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "encoder.pth"))
         torch.save(predictor_state_dict, os.path.join(self.output_folder, "predictor.pth"))
@@ -131,8 +132,18 @@ class IJEPA():
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
             torch.save(predictor_state_dict, os.path.join(self.output_folder, "models", f"predictor_epoch_{epoch}.pth"))
             torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder_epoch_{epoch}.pth"))
+    
+    def _recreate_csv_log(self):
+        csv_path = os.path.join(self.output_folder, "log.csv")
+        with open(csv_path, "r") as f:
+            lines = f.readlines()
 
-    def find_last_epoch(self):
+        new_lines = lines[:1] + [line for line in lines[1:] if int(line.split(",")[1]) <= self.last_epoch]
+
+        with open(csv_path, "w") as f:
+            f.writelines(new_lines)
+
+    def _find_last_epoch(self):
         last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")
         if not os.path.exists(last_epoch_path):
             return 0
@@ -142,17 +153,36 @@ class IJEPA():
         
         return last_epoch_data.get("last_epoch", 0)
 
-    def step_schedulers_to_epoch(self, epoch):
+    def _step_schedulers_to_epoch(self, epoch):
         if epoch == 0:
             return
         
         steps_per_epoch = len(self.train_dataloader)
         total_steps = epoch * steps_per_epoch
 
+        self.lr_values = []
+        self.wd_values = []
+        self.ema_values = []
         for _ in range(total_steps):
+            self.lr_values.append(self.lr_scheduler.get_value())
+            self.wd_values.append(self.wd_scheduler.get_value())
+            self.ema_values.append(self.ema_scheduler.get_value())
             self.lr_scheduler.step()
             self.wd_scheduler.step()
             self.ema_scheduler.step()
+    
+    def _get_train_loss_values(self):
+        csv_path = os.path.join(self.output_folder, "log.csv")
+        with open(csv_path, "r") as f:
+            lines = f.readlines()[1:]
+        train_loss_values = []
+        for line in lines:
+            epoch = line.split(",")[1]
+            train_loss = line.split(",")[3]
+            if int(epoch) <= self.last_epoch:
+                train_loss_values.append(float(train_loss))
+
+        return train_loss_values
     
     def update_target_network(self, ema):
         with torch.no_grad():

@@ -1,8 +1,6 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
-from torch.distributed.nn.functional import all_gather
 from torchvision.transforms import v2
-import torch.distributed as dist
 import torch.optim as optim
 import torch
 import copy
@@ -12,15 +10,9 @@ import os
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
 from .resnet import resnet50, mlp_head
-from src.byol_loss import byol_loss
+from .byol_loss import byol_loss
 from src.imagenet import imagenet
 from src.lars import LARS
-
-def concat_all_gather(tensor):
-    if not dist.is_available() or not dist.is_initialized():
-        return tensor
-
-    return torch.cat(all_gather(tensor), dim=0)
 
 class BYOL():
     def __init__(self,
@@ -62,12 +54,6 @@ class BYOL():
         wds = []
         emas = []
 
-        self.encoder.train()
-        self.encoder_projection_head.train()
-        self.encoder_prediction_head.train()
-        self.target_encoder.train() # Yes, you need to set to train!
-        self.target_encoder_projection_head.train() # Yes, you need to set to train!
-
         for epoch in range(1, self.optimization_num_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
                 continue
@@ -97,13 +83,12 @@ class BYOL():
                 loss_value = loss.item()
                 epoch_loss += loss_value
 
-                self.update_target_network(ema=self.ema_scheduler.get_value())
-
                 lrs.append(self.lr_scheduler.get_value())
                 wds.append(self.wd_scheduler.get_value())
                 emas.append(self.ema_scheduler.get_value())
-
                 write_on_csv(self.output_folder, epoch, iteration, loss_value, lrs[-1], wds[-1], emas[-1])
+
+                self.update_target_network(ema=self.ema_scheduler.get_value())
                 
                 self.lr_scheduler.step()
                 self.wd_scheduler.step()
@@ -370,6 +355,12 @@ class BYOL():
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.encoder_projection_head = DDP(self.encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
             self.encoder_prediction_head = DDP(self.encoder_prediction_head, device_ids=[self.rank], output_device=self.rank)
+        
+        self.encoder.train()
+        self.encoder_projection_head.train()
+        self.encoder_prediction_head.train()
+        self.target_encoder.train() # Yes, you need to set to train!
+        self.target_encoder_projection_head.train() # Yes, you need to set to train!
 
     def _load_config(self):
         self.data_datasets_path = str(self.config["data"]["datasets_path"])

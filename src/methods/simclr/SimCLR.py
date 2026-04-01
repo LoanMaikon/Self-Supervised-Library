@@ -1,25 +1,17 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
-from torch.distributed.nn.functional import all_gather
 from torchvision.transforms import v2
-import torch.distributed as dist
 import torch.optim as optim
 import torch
 import json
 import os
 
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, projection_head
 from src.imagenet import imagenet
 from src.nt_xent import nt_xent
 from src.lars import LARS
-
-def concat_all_gather(tensor):
-    if not dist.is_available() or not dist.is_initialized():
-        return tensor
-
-    return torch.cat(all_gather(tensor), dim=0)
 
 class SimCLR():
     def __init__(self,
@@ -59,9 +51,6 @@ class SimCLR():
         train_loss = []
         lrs = []
         wds = []
-
-        self.encoder.train()
-        self.projection_head.train()
 
         for epoch in range(1, self.optimization_num_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
@@ -295,6 +284,9 @@ class SimCLR():
 
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
+        
+        self.encoder.train()
+        self.projection_head.train()
 
     def _load_config(self):
         self.data_datasets_path = str(self.config["data"]["datasets_path"])

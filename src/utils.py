@@ -1,5 +1,8 @@
+from torch.distributed.nn.functional import all_gather
 from time import strftime, localtime
+import torch.distributed as dist
 import matplotlib.pyplot as plt
+import torch
 import json
 import os
 
@@ -47,3 +50,9 @@ def save_json(data, output_path, file_name):
     if is_main_process():
         with open(os.path.join(output_path, f"{file_name}.json"), "w") as f:
             json.dump(data, f, indent=4)
+
+def concat_all_gather(tensor):
+    if not dist.is_available() or not dist.is_initialized():
+        return tensor
+
+    return torch.cat(all_gather(tensor), dim=0)

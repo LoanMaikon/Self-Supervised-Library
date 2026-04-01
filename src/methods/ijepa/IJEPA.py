@@ -44,6 +44,7 @@ class IJEPA():
             self.last_epoch = self._find_last_epoch()
             self._step_schedulers_to_epoch(self.last_epoch)
             self.train_loss_values = self._get_train_loss_values()
+            self._recreate_csv_log()
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
@@ -110,7 +111,7 @@ class IJEPA():
 
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
-            write_on_log(f"Epoch {epoch} loss: {epoch_loss:.4f}", self.output_folder)
+            write_on_log(f"Epoch {epoch} loss: {epoch_loss}", self.output_folder)
             plot_fig(range(len(train_loss)), "Epoch", train_loss, "Loss", f"loss", self.output_folder)
             plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
@@ -126,9 +127,9 @@ class IJEPA():
         predictor_state_dict = self.predictor.module.state_dict() if self.world_size > 1 else self.predictor.state_dict()
         target_encoder_state_dict = self.target_encoder.state_dict()
 
-        torch.save(encoder_state_dict, os.path.join(self.output_folder, "encoder.pth"))
-        torch.save(predictor_state_dict, os.path.join(self.output_folder, "predictor.pth"))
-        torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "target_encoder.pth"))
+        torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
+        torch.save(predictor_state_dict, os.path.join(self.output_folder, "models", "predictor.pth"))
+        torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", "target_encoder.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
@@ -136,6 +137,9 @@ class IJEPA():
             torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder_epoch_{epoch}.pth"))
     
     def _recreate_csv_log(self):
+        if not is_main_process():
+            return
+
         csv_path = os.path.join(self.output_folder, "log.csv")
         with open(csv_path, "r") as f:
             lines = f.readlines()

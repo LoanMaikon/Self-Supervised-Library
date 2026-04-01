@@ -48,7 +48,6 @@ optimization:
   weight_decay:
     - 1e-6
     - 1e-5
-    - 1e-6
   ema:
     - 0.996
     - 1.0

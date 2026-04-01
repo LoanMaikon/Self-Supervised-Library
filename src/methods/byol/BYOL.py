@@ -43,6 +43,7 @@ class BYOL():
             self.last_epoch = self._find_last_epoch()
             self._step_schedulers_to_epoch(self.last_epoch)
             self.train_loss_values = self._get_train_loss_values()
+            self._recreate_csv_log()
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
@@ -102,7 +103,7 @@ class BYOL():
 
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
-            write_on_log(f"Epoch {epoch} loss: {epoch_loss:.4f}", self.output_folder)
+            write_on_log(f"Epoch {epoch} loss: {epoch_loss}", self.output_folder)
             plot_fig(range(len(train_loss)), "Epoch", train_loss, "Loss", f"loss", self.output_folder)
             plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)

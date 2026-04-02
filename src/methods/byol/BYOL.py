@@ -39,22 +39,23 @@ class BYOL():
         self._load_optimizer()
         self._load_schedulers()
 
+        self.train_loss = []
+
+        self.lr_values = []
+        self.wd_values = []
+        self.ema_values = []
+
         if self.continue_training:
-            self.last_epoch = self._find_last_epoch()
+            self.last_epoch = self._get_last_epoch()
             self._step_schedulers_to_epoch(self.last_epoch)
-            self.train_loss_values = self._get_train_loss_values()
             self._recreate_csv_log()
+            self._load_last_values()
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
     def train(self):
         write_on_log("Starting training...", self.output_folder)
         scaler = torch.amp.GradScaler()
-
-        train_loss = [] if not self.continue_training else self.train_loss_values
-        lrs = [] if not self.continue_training else self.lr_values
-        wds = [] if not self.continue_training else self.wd_values
-        emas = [] if not self.continue_training else self.ema_values
 
         for epoch in range(1, self.optimization_num_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
@@ -63,7 +64,7 @@ class BYOL():
             write_on_log(f"Epoch {epoch}/{self.optimization_num_epochs}", self.output_folder)
             self.train_sampler.set_epoch(epoch)
 
-            epoch_loss = 0.0
+            self.train_loss.append(0.0)
 
             for iteration, (x1, x2) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
@@ -71,10 +72,10 @@ class BYOL():
                 x1, x2 = x1.to(self.device, non_blocking=True), x2.to(self.device, non_blocking=True)
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                    concated = torch.cat([x1, x2], dim=0)
+                    concat = torch.cat([x1, x2], dim=0)
 
-                    z_online = self.encoder_prediction_head(self.encoder_projection_head(self.encoder(concated)))
-                    z_target = self.target_encoder_projection_head(self.target_encoder(concated))
+                    z_online = self.encoder_prediction_head(self.encoder_projection_head(self.encoder(concat)))
+                    z_target = self.target_encoder_projection_head(self.target_encoder(concat))
 
                     loss = self.apply_criterion(z_online, z_target)
 
@@ -83,12 +84,12 @@ class BYOL():
                 scaler.update()
 
                 loss_value = loss.item()
-                epoch_loss += loss_value
+                self.train_loss[-1] += loss_value
 
-                lrs.append(self.lr_scheduler.get_value())
-                wds.append(self.wd_scheduler.get_value())
-                emas.append(self.ema_scheduler.get_value())
-                write_on_csv(self.output_folder, epoch, iteration, loss_value, lrs[-1], wds[-1], emas[-1])
+                self.lr_values.append(self.lr_scheduler.get_value())
+                self.wd_values.append(self.wd_scheduler.get_value())
+                self.ema_values.append(self.ema_scheduler.get_value())
+                write_on_csv(self.output_folder, epoch, iteration, loss_value, self.lr_values[-1], self.wd_values[-1], self.ema_values[-1])
 
                 self.update_target_network(ema=self.ema_scheduler.get_value())
                 
@@ -97,18 +98,20 @@ class BYOL():
                 self.ema_scheduler.step()
             
             epoch_loss /= len(self.train_dataloader)
-            train_loss.append(epoch_loss)
+            self.train_loss[-1] = epoch_loss
 
             self.save_models(epoch)
 
-            save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
-
             write_on_log(f"Loss: {epoch_loss}", self.output_folder)
 
-            plot_fig(range(len(train_loss)), "Epoch", train_loss, "Loss", f"loss", self.output_folder)
-            plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
-            plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
-            plot_fig(range(len(emas)), "Iteration", emas, "EMA", f"ema", self.output_folder)
+            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
+            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
+            plot_fig(range(len(self.ema_values)), "Iteration", self.ema_values, "EMA", f"ema", self.output_folder)
+
+            save_json({"train_loss": self.train_loss}, self.output_folder, "training_info")
+
+            save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
             write_on_log("", self.output_folder)
 
@@ -138,6 +141,9 @@ class BYOL():
             torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", f"target_projection_head_epoch_{epoch}.pth"))
 
     def _recreate_csv_log(self):
+        if not is_main_process():
+            return
+
         csv_path = os.path.join(self.output_folder, "log.csv")
         with open(csv_path, "r") as f:
             lines = f.readlines()
@@ -147,7 +153,7 @@ class BYOL():
         with open(csv_path, "w") as f:
             f.writelines(new_lines)
 
-    def _find_last_epoch(self):
+    def _get_last_epoch(self):
         last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")
         if not os.path.exists(last_epoch_path):
             return 0
@@ -164,9 +170,6 @@ class BYOL():
         steps_per_epoch = len(self.train_dataloader)
         total_steps = epoch * steps_per_epoch
 
-        self.lr_values = []
-        self.wd_values = []
-        self.ema_values = []
         for _ in range(total_steps):
             self.lr_values.append(self.lr_scheduler.get_value())
             self.wd_values.append(self.wd_scheduler.get_value())
@@ -175,18 +178,23 @@ class BYOL():
             self.wd_scheduler.step()
             self.ema_scheduler.step()
     
-    def _get_train_loss_values(self):
+    def _load_last_values(self):
         csv_path = os.path.join(self.output_folder, "log.csv")
         with open(csv_path, "r") as f:
             lines = f.readlines()[1:]
-        train_loss_values = []
+        
         for line in lines:
             epoch = line.split(",")[1]
-            train_loss = line.split(",")[3]
+            lr = line.split(",")[4]
+            wd = line.split(",")[5]
+            ema = line.split(",")[6]
             if int(epoch) <= self.last_epoch:
-                train_loss_values.append(float(train_loss))
-
-        return train_loss_values
+                self.lr_values.append(float(lr))
+                self.wd_values.append(float(wd))
+                self.ema_values.append(float(ema))
+        
+        training_info_json = json.load(open(os.path.join(self.output_folder, "training_info.json"), "r"))
+        self.train_loss = training_info_json.get("train_loss", [])
     
     def update_target_network(self, ema):
         with torch.no_grad():

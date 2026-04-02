@@ -43,25 +43,25 @@ class Evaluation():
         self._load_optimizer()
         self._load_schedulers()
 
+        self.train_loss = []
+        if self.has_val():
+            self.val_loss = []
+            self.val_accuracy = []
+
+        self.lr_values = []
+        self.wd_values = []
+
         if self.continue_training:
-            self.last_epoch = self._find_last_epoch()
+            self.last_epoch = self._get_last_epoch()
             self._step_schedulers_to_epoch(self.last_epoch)
-            self.train_loss_values = self._get_train_loss_values()
-            self.val_loss_values = [] if not self.has_val() else self._get_val_loss_values()
-            self.val_accuracy_values = [] if not self.has_val() else self._get_val_accuracy_values()
             self._recreate_csv_log()
+            self._load_last_values()
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
     
     def train(self):
         write_on_log("Starting training...", self.output_folder)
         scaler = torch.amp.GradScaler()
-
-        train_loss = [] if not self.continue_training else self.train_loss_values
-        val_loss = [] if not self.continue_training else self.val_loss_values
-        val_accuracy = [] if not self.continue_training else self.val_accuracy_values
-        lrs = [] if not self.continue_training else self.lr_values
-        wds = [] if not self.continue_training else self.wd_values
 
         for epoch in range(1, self.optimization_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
@@ -70,7 +70,7 @@ class Evaluation():
             write_on_log(f"Epoch {epoch}/{self.optimization_epochs}", self.output_folder)
             self.train_sampler.set_epoch(epoch)
 
-            epoch_train_loss = 0.0
+            self.train_loss.append(0.0)
 
             self.encoder.train()
             self.linear_head.train()
@@ -90,32 +90,30 @@ class Evaluation():
                 scaler.update()
 
                 loss_value = loss.item()
-                epoch_train_loss += loss_value
+                self.train_loss[-1] += loss_value
 
-                lrs.append(self.lr_scheduler.get_value())
-                wds.append(self.wd_scheduler.get_value())
+                self.lr_values.append(self.lr_scheduler.get_value())
+                self.wd_values.append(self.wd_scheduler.get_value())
 
-                write_on_csv(self.output_folder, epoch, iteration, loss_value, lrs[-1], wds[-1])
+                write_on_csv(self.output_folder, epoch, iteration, loss_value, self.lr_values[-1], self.wd_values[-1])
 
                 self.lr_scheduler.step()
                 self.wd_scheduler.step()
 
-            epoch_train_loss /= len(self.train_dataloader)
-            train_loss.append(epoch_train_loss)
+            self.train_loss[-1] /= len(self.train_dataloader)
 
             self.save_models(epoch)
 
-            save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
+            write_on_log(f"Train loss: {self.train_loss[-1]}", self.output_folder)
 
-            write_on_log(f"Train loss: {epoch_train_loss}", self.output_folder)
-
-            plot_fig(range(len(train_loss)), "Epoch", train_loss, "Loss", f"loss", self.output_folder)
-            plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
-            plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
+            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
+            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
 
             if self.has_val():
-                epoch_val_loss = 0.0
-                epoch_val_accuracy = 0.0
+                self.val_loss.append(0.0)
+                self.val_accuracy.append(0.0)
+
                 self.encoder.eval()
                 self.linear_head.eval()
 
@@ -130,23 +128,29 @@ class Evaluation():
                         loss = self.apply_criterion(output, labels)
                         accuracy = (output.argmax(dim=1) == labels).float().mean().item()
 
-                        epoch_val_loss += loss.item()
-                        epoch_val_accuracy += accuracy
+                        self.val_loss[-1] += loss.item()
+                        self.val_accuracy[-1] += accuracy
 
-                epoch_val_loss /= len(self.val_dataloader)
-                epoch_val_accuracy /= len(self.val_dataloader)
-                val_loss.append(epoch_val_loss)
-                val_accuracy.append(epoch_val_accuracy)
+                self.val_loss[-1] /= len(self.val_dataloader)
+                self.val_accuracy[-1] /= len(self.val_dataloader)
 
-                write_on_log(f"Validation loss: {epoch_val_loss}", self.output_folder)
-                write_on_log(f"Validation accuracy: {epoch_val_accuracy}", self.output_folder)
+                write_on_log(f"Validation loss: {self.val_loss[-1]}", self.output_folder)
+                write_on_log(f"Validation accuracy: {self.val_accuracy[-1]}", self.output_folder)
 
-                plot_fig(range(len(val_loss)), "Epoch", val_loss, "Loss", f"val_loss", self.output_folder)
-                plot_fig(range(len(val_accuracy)), "Epoch", val_accuracy, "Accuracy", f"val_accuracy", self.output_folder)
+                plot_fig(range(len(self.val_loss)), "Epoch", self.val_loss, "Loss", f"val_loss", self.output_folder)
+                plot_fig(range(len(self.val_accuracy)), "Epoch", self.val_accuracy, "Accuracy", f"val_accuracy", self.output_folder)
 
-                write_on_csv(self.output_folder, epoch, iteration, epoch_train_loss, lrs[-1], wds[-1], val_loss[-1], val_accuracy[-1])
+                save_json({
+                    "train_loss": self.train_loss[-1],
+                    "val_loss": self.val_loss[-1],
+                    "val_accuracy": self.val_accuracy[-1]
+                }, self.output_folder, "training_info")
             else:
-                write_on_csv(self.output_folder, epoch, iteration, epoch_train_loss, lrs[-1], wds[-1])
+                save_json({
+                    "train_loss": self.train_loss[-1],
+                }, self.output_folder, "training_info")
+            
+            save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
             write_on_log("", self.output_folder)
     
@@ -207,7 +211,7 @@ class Evaluation():
         with open(csv_path, "w") as f:
             f.writelines(new_lines)
 
-    def _find_last_epoch(self):
+    def _get_last_epoch(self):
         last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")
         if not os.path.exists(last_epoch_path):
             return 0
@@ -224,55 +228,30 @@ class Evaluation():
         steps_per_epoch = len(self.train_dataloader)
         total_steps = epoch * steps_per_epoch
 
-        self.lr_values = []
-        self.wd_values = []
-        self.ema_values = []
         for _ in range(total_steps):
             self.lr_values.append(self.lr_scheduler.get_value())
             self.wd_values.append(self.wd_scheduler.get_value())
-            self.ema_values.append(self.ema_scheduler.get_value())
             self.lr_scheduler.step()
             self.wd_scheduler.step()
-            self.ema_scheduler.step()
     
-    def _get_train_loss_values(self):
+    def _load_last_values(self):
         csv_path = os.path.join(self.output_folder, "log.csv")
         with open(csv_path, "r") as f:
             lines = f.readlines()[1:]
-        train_loss_values = []
+        
         for line in lines:
             epoch = line.split(",")[1]
-            train_loss = line.split(",")[3]
+            lr = line.split(",")[4]
+            wd = line.split(",")[5]
             if int(epoch) <= self.last_epoch:
-                train_loss_values.append(float(train_loss))
-
-        return train_loss_values
-
-    def _get_val_loss_values(self):
-        csv_path = os.path.join(self.output_folder, "log.csv")
-        with open(csv_path, "r") as f:
-            lines = f.readlines()[1:]
-        val_loss_values = []
-        for line in lines:
-            epoch = line.split(",")[1]
-            val_loss = line.split(",")[7]
-            if int(epoch) <= self.last_epoch:
-                val_loss_values.append(float(val_loss))
-
-        return val_loss_values
-    
-    def _get_val_accuracy_values(self):
-        csv_path = os.path.join(self.output_folder, "log.csv")
-        with open(csv_path, "r") as f:
-            lines = f.readlines()[1:]
-        val_accuracy_values = []
-        for line in lines:
-            epoch = line.split(",")[1]
-            val_accuracy = line.split(",")[8]
-            if int(epoch) <= self.last_epoch:
-                val_accuracy_values.append(float(val_accuracy))
-
-        return val_accuracy_values
+                self.lr_values.append(float(lr))
+                self.wd_values.append(float(wd))
+        
+        training_info_json = json.load(open(os.path.join(self.output_folder, "training_info.json"), "r"))
+        self.train_loss = training_info_json.get("train_loss", [])
+        if self.has_val():
+            self.val_loss = training_info_json.get("val_loss", [])
+            self.val_accuracy = training_info_json.get("val_accuracy", [])
 
     def _load_models(self):
         def __try_load_models():

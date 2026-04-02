@@ -55,8 +55,8 @@ optimization:
   - 0.001
   - 0.000001
   weight_decay:
-  - 0.01
-  - 0.001
+  - 0.04
+  - 0.4
   epochs: 5
   warmup_epochs: 2
   optimizer: adamw

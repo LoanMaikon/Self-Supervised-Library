@@ -237,8 +237,6 @@ class Evaluation():
         total_steps = epoch * steps_per_epoch
 
         for _ in range(total_steps):
-            self.lr_values.append(self.lr_scheduler.get_value())
-            self.wd_values.append(self.wd_scheduler.get_value())
             self.lr_scheduler.step()
             self.wd_scheduler.step()
     

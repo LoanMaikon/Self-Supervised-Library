@@ -416,7 +416,8 @@ class Evaluation():
         self.linear_head.to(self.device)
 
         if self.world_size > 1:
-            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            if self.meta_mode == "fine_tuning":
+                self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.linear_head = DDP(self.linear_head, device_ids=[self.rank], output_device=self.rank)
 
     def _load_transform(self):

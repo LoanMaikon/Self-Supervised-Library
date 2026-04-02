@@ -135,6 +135,8 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion * width_mult, num_classes)
 
+        self.out_dim = 512 * block.expansion * width_mult
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -177,10 +179,10 @@ class ResNet(nn.Module):
         self.fc = nn.Identity()
     
     def fit_classifier_head(self, num_classes):
-        self.fc = nn.Linear(self.fc.in_features, num_classes)
+        self.fc = nn.Linear(self.out_dim, num_classes)
     
     def get_output_dim(self):
-        return self.fc.in_features
+        return self.out_dim
 
     def freeze(self):
         for param in self.parameters():

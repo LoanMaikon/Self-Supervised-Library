@@ -164,6 +164,8 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(width_multiplier* 512 * block.expansion, num_classes)
 
+        self.out_dim = width_multiplier * 512 * block.expansion
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -219,13 +221,13 @@ class ResNet(nn.Module):
         return features
     
     def get_output_dim(self):
-        return self.fc.in_features
+        return self.out_dim
     
     def remove_classifier_head(self):
         self.fc = nn.Identity()
 
     def fit_classifier_head(self, num_classes):
-        self.fc = nn.Linear(self.fc.in_features, num_classes)
+        self.fc = nn.Linear(self.out_dim, num_classes)
 
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)

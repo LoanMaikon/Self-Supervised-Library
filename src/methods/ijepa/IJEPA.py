@@ -66,6 +66,7 @@ class IJEPA():
             self.train_sampler.set_epoch(epoch)
 
             self.train_loss.append(0.0)
+            num_samples = 0
 
             for iteration, ((images, labels), masks_context, masks_pred) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
@@ -92,7 +93,8 @@ class IJEPA():
                 scaler.update()
 
                 loss_value = loss.item()
-                self.train_loss[-1] += loss_value
+                self.train_loss[-1] += loss_value * images.size(0)
+                num_samples += images.size(0)
 
                 self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())
@@ -105,7 +107,7 @@ class IJEPA():
                 self.wd_scheduler.step()
                 self.ema_scheduler.step()
             
-            self.train_loss[-1] /= len(self.train_dataloader)
+            self.train_loss[-1] /= num_samples
 
             self.save_models(epoch)
 

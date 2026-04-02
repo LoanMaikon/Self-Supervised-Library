@@ -63,6 +63,7 @@ class SimCLR():
             self.train_sampler.set_epoch(epoch)
 
             self.train_loss.append(0.0)
+            num_samples = 0
 
             for iteration, (x1, x2) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
@@ -84,7 +85,8 @@ class SimCLR():
                 scaler.update()
 
                 loss_value = loss.item()
-                self.train_loss[-1] += loss_value
+                self.train_loss[-1] += loss_value * x1.size(0)
+                num_samples += x1.size(0)
 
                 self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())
@@ -94,7 +96,7 @@ class SimCLR():
                 self.lr_scheduler.step()
                 self.wd_scheduler.step()
             
-            self.train_loss[-1] /= len(self.train_dataloader)
+            self.train_loss[-1] /= num_samples
 
             self.save_models(epoch)
 

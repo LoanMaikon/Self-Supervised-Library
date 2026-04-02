@@ -71,6 +71,7 @@ class Evaluation():
             self.train_sampler.set_epoch(epoch)
 
             self.train_loss.append(0.0)
+            num_samples = 0
 
             self.encoder.train()
             self.linear_head.train()
@@ -90,7 +91,8 @@ class Evaluation():
                 scaler.update()
 
                 loss_value = loss.item()
-                self.train_loss[-1] += loss_value
+                self.train_loss[-1] += loss_value * images.size(0)
+                num_samples += images.size(0)
 
                 self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())
@@ -100,7 +102,7 @@ class Evaluation():
                 self.lr_scheduler.step()
                 self.wd_scheduler.step()
 
-            self.train_loss[-1] /= len(self.train_dataloader)
+            self.train_loss[-1] /= num_samples
 
             self.save_models(epoch)
 
@@ -117,6 +119,8 @@ class Evaluation():
                 self.encoder.eval()
                 self.linear_head.eval()
 
+                num_samples = 0
+
                 with torch.no_grad():
                     for images, labels in self.val_dataloader:
                         images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
@@ -128,11 +132,13 @@ class Evaluation():
                         loss = self.apply_criterion(output, labels)
                         accuracy = (output.argmax(dim=1) == labels).float().mean().item()
 
-                        self.val_loss[-1] += loss.item()
-                        self.val_accuracy[-1] += accuracy
+                        num_samples += images.size(0)
 
-                self.val_loss[-1] /= len(self.val_dataloader)
-                self.val_accuracy[-1] /= len(self.val_dataloader)
+                        self.val_loss[-1] += loss.item() * images.size(0)
+                        self.val_accuracy[-1] += accuracy * images.size(0)
+
+                self.val_loss[-1] /= num_samples
+                self.val_accuracy[-1] /= num_samples
 
                 write_on_log(f"Validation loss: {self.val_loss[-1]}", self.output_folder)
                 write_on_log(f"Validation accuracy: {self.val_accuracy[-1]}", self.output_folder)
@@ -162,6 +168,7 @@ class Evaluation():
 
         test_loss = 0.0
         test_accuracy = 0.0
+        num_samples = 0
 
         with torch.no_grad():
             for images, labels in self.test_dataloader:
@@ -174,11 +181,12 @@ class Evaluation():
                 loss = self.apply_criterion(output, labels)
                 accuracy = (output.argmax(dim=1) == labels).float().mean().item()
 
-                test_loss += loss.item()
-                test_accuracy += accuracy
-        
-        test_loss /= len(self.test_dataloader)
-        test_accuracy /= len(self.test_dataloader)
+                test_loss += loss.item() * images.size(0)
+                test_accuracy += accuracy * images.size(0)
+                num_samples += images.size(0)
+
+        test_loss /= num_samples
+        test_accuracy /= num_samples
 
         write_on_log(f"Test loss: {test_loss}", self.output_folder)
         write_on_log(f"Test accuracy: {test_accuracy}", self.output_folder)

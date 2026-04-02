@@ -65,6 +65,7 @@ class BYOL():
             self.train_sampler.set_epoch(epoch)
 
             self.train_loss.append(0.0)
+            num_samples = 0
 
             for iteration, (x1, x2) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
@@ -84,7 +85,8 @@ class BYOL():
                 scaler.update()
 
                 loss_value = loss.item()
-                self.train_loss[-1] += loss_value
+                self.train_loss[-1] += loss_value * x1.size(0)
+                num_samples += x1.size(0)
 
                 self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())
@@ -96,13 +98,12 @@ class BYOL():
                 self.lr_scheduler.step()
                 self.wd_scheduler.step()
                 self.ema_scheduler.step()
-            
-            epoch_loss /= len(self.train_dataloader)
-            self.train_loss[-1] = epoch_loss
+
+            self.train_loss[-1] /= num_samples
 
             self.save_models(epoch)
 
-            write_on_log(f"Loss: {epoch_loss}", self.output_folder)
+            write_on_log(f"Loss: {self.train_loss[-1]}", self.output_folder)
 
             plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
             plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)

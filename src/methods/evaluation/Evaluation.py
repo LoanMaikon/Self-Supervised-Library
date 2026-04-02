@@ -187,11 +187,11 @@ class Evaluation():
     
         os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
 
-        torch.save(self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict(), os.path.join(self.output_folder, "models", "encoder.pth"))
+        torch.save(self.encoder.module.state_dict() if self.world_size > 1 and self.meta_mode == "fine_tuning" else self.encoder.state_dict(), os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(self.linear_head.module.state_dict() if self.world_size > 1 else self.linear_head.state_dict(), os.path.join(self.output_folder, "models", "linear_head.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
-            torch.save(self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict(), os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
+            torch.save(self.encoder.module.state_dict() if self.world_size > 1 and self.meta_mode == "fine_tuning" else self.encoder.state_dict(), os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
             torch.save(self.linear_head.module.state_dict() if self.world_size > 1 else self.linear_head.state_dict(), os.path.join(self.output_folder, "models", f"linear_head_epoch_{epoch}.pth"))
     
     def _recreate_csv_log(self):

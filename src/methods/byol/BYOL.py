@@ -103,11 +103,14 @@ class BYOL():
 
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
-            write_on_log(f"Epoch {epoch} loss: {epoch_loss}", self.output_folder)
+            write_on_log(f"Loss: {epoch_loss}", self.output_folder)
+
             plot_fig(range(len(train_loss)), "Epoch", train_loss, "Loss", f"loss", self.output_folder)
             plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
             plot_fig(range(len(emas)), "Iteration", emas, "EMA", f"ema", self.output_folder)
+
+            write_on_log("", self.output_folder)
 
     def save_models(self, epoch):
         if not is_main_process():
@@ -390,11 +393,11 @@ class BYOL():
         self.encoder.remove_classifier_head()
         self.target_encoder.remove_classifier_head()
 
-        self.encoder.unfreeze_encoder()
+        self.encoder.unfreeze()
         self.encoder_projection_head.unfreeze()
         self.encoder_prediction_head.unfreeze()
         
-        self.target_encoder.freeze_encoder()
+        self.target_encoder.freeze()
         self.target_encoder_projection_head.freeze()
 
         if self.world_size > 1:

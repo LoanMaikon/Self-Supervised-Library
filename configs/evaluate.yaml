@@ -1,7 +1,7 @@
 mode: evaluate
 
 data:
-  datasets_path: /disk2/lmk22/datasets
+  datasets_path: /home/luan/Desktop/datasets
   train_dataset: imagenet
   batch_size: 16 # For each device, so the effective batch size is batch_size * num_devices
   crop_size: 224

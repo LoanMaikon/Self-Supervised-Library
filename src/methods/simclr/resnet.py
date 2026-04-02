@@ -178,28 +178,35 @@ class ResNet(nn.Module):
     
     def fit_classifier_head(self, num_classes):
         self.fc = nn.Linear(self.fc.in_features, num_classes)
+    
+    def get_output_dim(self):
+        return self.fc.in_features
 
-    def freeze_encoder(self):
+    def freeze(self):
         for param in self.parameters():
             param.requires_grad = False
         for param in self.fc.parameters():
             param.requires_grad = True
         
-    def unfreeze_encoder(self):
+    def unfreeze(self):
         for param in self.parameters():
             param.requires_grad = True
+
+    def get_features(self, features):
+        return features
     
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)
 
         state_dict = checkpoint.get("state_dict", checkpoint)
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 
         errors = []
 
         # classifier head 1000 classes
         self.fit_classifier_head(num_classes=1000)
         try:
-            self.load_state_dict(state_dict)
+            self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
             errors.append(("classifier_head_1000", str(e)))
@@ -207,7 +214,7 @@ class ResNet(nn.Module):
         # without classifier head
         self.remove_classifier_head()
         try:
-            self.load_state_dict(state_dict)
+            self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
             errors.append(("without_classifier_head", str(e)))
@@ -287,10 +294,11 @@ class ProjectionHead(nn.Module):
         checkpoint = torch.load(weight_path, map_location=device)
 
         state_dict = checkpoint.get("state_dict", checkpoint)
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 
         errors = []
         try:
-            self.load_state_dict(state_dict)
+            self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
             errors.append(("projection_head", str(e)))

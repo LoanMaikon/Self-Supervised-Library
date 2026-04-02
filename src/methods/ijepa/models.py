@@ -275,12 +275,12 @@ class VisionTransformer(nn.Module):
         self.embed_dim = embed_dim
 
         # Divide the image into patches and embed them
-        self.tokenizer = PatchEmbedding(image_size=image_size, patch_size=patch_size, in_channels=in_channels, embedding_dimension=embed_dim)
+        self.patch_embed = PatchEmbedding(image_size=image_size, patch_size=patch_size, in_channels=in_channels, embedding_dimension=embed_dim)
 
         # Positional embedding (not learnable)
-        self.positional_embedding = nn.Parameter(torch.zeros(1, self.tokenizer.num_patches, embed_dim), requires_grad=False)
-        values = get_2d_sincos_pos_embed(embed_dim, int(self.tokenizer.num_patches**0.5))
-        self.positional_embedding.data.copy_(torch.from_numpy(values).float().unsqueeze(0))
+        self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches, embed_dim), requires_grad=False)
+        values = get_2d_sincos_pos_embed(embed_dim, int(self.patch_embed.num_patches**0.5))
+        self.pos_embed.data.copy_(torch.from_numpy(values).float().unsqueeze(0))
 
         # Create the transformer blocks
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # Stochastic depth decay - more drop for deeper blocks
@@ -301,7 +301,10 @@ class VisionTransformer(nn.Module):
         return self.embed_dim
 
     def get_num_patches(self):
-        return self.tokenizer.num_patches
+        return self.patch_embed.num_patches
+
+    def get_features(self, features):
+        return features.mean(dim=1)
 
     def _fix_init_weight(self):
         def __rescale(param, layer_id):
@@ -355,21 +358,32 @@ class VisionTransformer(nn.Module):
 
         return pos
 
+    def get_output_dim(self):
+        return self.embed_dim
+
+    def remove_classifier_head(self):
+        pass
+
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)
 
-        state_dict = checkpoint.get("state_dict", checkpoint)
+        if "encoder" in checkpoint:
+            state_dict = checkpoint["encoder"]
+        else:
+            state_dict = checkpoint.get("state_dict", checkpoint)
+        
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 
         errors = []
         try:
-            self.load_state_dict(state_dict)
+            self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
-            errors.append(("projection_head", str(e)))
+            errors.append(("state_dict", str(e)))
         
         raise ValueError(
             f"Failed to load weights from {weight_path}. "
-            f"Tried: {state_dict.keys()}"
+            f"Tried: {clean_state_dict.keys()}"
         )
 
     def freeze(self):
@@ -386,11 +400,11 @@ class VisionTransformer(nn.Module):
                 masks = [masks]
 
         # Patchify x
-        x = self.tokenizer(x)
+        x = self.patch_embed(x)
         B, N, D = x.shape
 
         # Add positional embedding to x
-        pos_embed = self._interpolate_pos_encoding(x, self.positional_embedding)
+        pos_embed = self._interpolate_pos_encoding(x, self.pos_embed)
         x = x + pos_embed
 
         # Mask x
@@ -441,9 +455,9 @@ class VisionTransformerPredictor(nn.Module):
         self.mask_token = nn.Parameter(torch.zeros(1, 1, predictor_embed_dim))
 
         # Create positional embedding for the predictor (not learnable)
-        self.positional_embedding = nn.Parameter(torch.zeros(1, num_patches, predictor_embed_dim), requires_grad=False)
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, predictor_embed_dim), requires_grad=False)
         values = get_2d_sincos_pos_embed(predictor_embed_dim, int(num_patches ** 0.5))
-        self.positional_embedding.data.copy_(torch.from_numpy(values).float().unsqueeze(0))
+        self.pos_embed.data.copy_(torch.from_numpy(values).float().unsqueeze(0))
 
         # Create the transformer blocks for the predictor
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # Stochastic depth decay - more drop for deeper blocks
@@ -488,16 +502,18 @@ class VisionTransformerPredictor(nn.Module):
 
         state_dict = checkpoint.get("state_dict", checkpoint)
 
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+
         errors = []
         try:
-            self.load_state_dict(state_dict)
+            self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
             errors.append(("projection_head", str(e)))
         
         raise ValueError(
             f"Failed to load weights from {weight_path}. "
-            f"Tried: {state_dict.keys()}"
+            f"Tried: {clean_state_dict.keys()}"
         )
     
     def freeze(self):
@@ -529,13 +545,13 @@ class VisionTransformerPredictor(nn.Module):
         x = self.predictor_embed(x)
 
         # Add positional embedding to x tokens
-        x_pos_embed = self.positional_embedding.repeat(B, 1, 1)
+        x_pos_embed = self.pos_embed.repeat(B, 1, 1)
         x += apply_masks(x_pos_embed, masks_x)
 
         _, N_ctxt, D = x.shape
 
         # Concat mask tokens to x
-        pos_embs = self.positional_embedding.repeat(B, 1, 1)
+        pos_embs = self.pos_embed.repeat(B, 1, 1)
         pos_embs = apply_masks(pos_embs, masks)
         pos_embs = repeat_interleave_batch(pos_embs, B, repeat=len(masks_x))
         pred_tokens = self.mask_token.repeat(pos_embs.size(0), pos_embs.size(1), 1)

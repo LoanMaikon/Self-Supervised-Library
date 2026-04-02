@@ -205,21 +205,59 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
         
-    def freeze_encoder(self):
+    def freeze(self):
         for param in self.parameters():
             param.requires_grad = False
         for param in self.fc.parameters():
             param.requires_grad = True
     
-    def unfreeze_encoder(self):
+    def unfreeze(self):
         for param in self.parameters():
             param.requires_grad = True
+    
+    def get_features(self, features):
+        return features
+    
+    def get_output_dim(self):
+        return self.fc.in_features
     
     def remove_classifier_head(self):
         self.fc = nn.Identity()
 
-    def fith_classifier_head(self, num_classes):
+    def fit_classifier_head(self, num_classes):
         self.fc = nn.Linear(self.fc.in_features, num_classes)
+
+    def load_weights(self, weight_path, device):
+        checkpoint = torch.load(weight_path, map_location=device)
+
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+
+        errors = []
+        try:
+            self.load_state_dict(clean_state_dict)
+            return
+        except Exception as e:
+            errors.append(("projection_head", str(e)))
+
+        try:
+            self.remove_classifier_head()
+            self.load_state_dict(clean_state_dict)
+            return
+        except Exception as e:
+            errors.append(("remove_classifier_head", str(e)))
+
+        try:
+            self.fit_classifier_head(1000)
+            self.load_state_dict(clean_state_dict)
+            return
+        except Exception as e:
+            errors.append(("fit_classifier_head", str(e)))
+        
+        raise ValueError(
+            f"Failed to load weights from {weight_path}. "
+            f"Tried: {errors}"
+        )
     
     def _forward_impl_checkpoint(self, x):
         # See note [TorchScript super()]
@@ -294,13 +332,14 @@ class MLPHead(nn.Module):
         checkpoint = torch.load(weight_path, map_location=device)
 
         state_dict = checkpoint.get("state_dict", checkpoint)
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 
         errors = []
         try:
-            self.load_state_dict(state_dict)
+            self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
-            errors.append(("projection_head", str(e)))
+            errors.append(("state_dict", str(e)))
         
         raise ValueError(
             f"Failed to load weights from {weight_path}. "

@@ -100,10 +100,13 @@ class SimCLR():
 
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
-            write_on_log(f"Epoch {epoch} loss: {epoch_loss}", self.output_folder)
+            write_on_log(f"Loss: {epoch_loss}", self.output_folder)
+
             plot_fig(range(len(train_loss)), "Epoch", train_loss, "Loss", f"loss", self.output_folder)
             plot_fig(range(len(lrs)), "Iteration", lrs, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(wds)), "Iteration", wds, "Weight Decay", f"weight_decay", self.output_folder)
+
+            write_on_log("", self.output_folder)
 
     def save_models(self, epoch):
         if not is_main_process():
@@ -320,7 +323,7 @@ class SimCLR():
         # Removing classifier head from ResNet if it exists
         self.encoder.remove_classifier_head()
 
-        self.encoder.unfreeze_encoder()
+        self.encoder.unfreeze()
         self.projection_head.unfreeze()
 
         if self.world_size > 1:

@@ -15,7 +15,7 @@ def write_on_log(text, output_path):
     with open(os.path.join(output_path, "log.txt"), mode) as file:
         file.write(time + text + "\n")
 
-def write_on_csv(output_path, epoch, iteration, loss, lr, wd, ema="-"):
+def write_on_csv(output_path, epoch, iteration, loss, lr, wd, ema="-", val_loss="-", val_accuracy="-"):
     if not is_main_process():
         return
     
@@ -24,9 +24,9 @@ def write_on_csv(output_path, epoch, iteration, loss, lr, wd, ema="-"):
 
     with open(file_path, "a") as csv_file:
         if not file_exists:
-            csv_file.write("timestamp,epoch,iteration,loss,lr,wd,ema\n")
+            csv_file.write("timestamp,epoch,iteration,loss,lr,wd,ema,val_loss,val_accuracy\n")
 
-        csv_file.write(f"{strftime('%Y-%m-%d %H:%M:%S', localtime())},{epoch},{iteration},{loss},{lr},{wd},{ema}\n")
+        csv_file.write(f"{strftime('%Y-%m-%d %H:%M:%S', localtime())},{epoch},{iteration},{loss},{lr},{wd},{ema},{val_loss},{val_accuracy}\n")
 
 def is_distributed():
     return int(os.environ.get("WORLD_SIZE", "1")) > 1

@@ -11,7 +11,8 @@ from src.methods.simclr.resnet import resnet50 as simclr_resnet50
 from src.methods.ijepa.models import vit_tiny as ijepa_vit_tiny, vit_small as ijepa_vit_small, vit_base as ijepa_vit_base, \
     vit_large as ijepa_vit_large, vit_huge as ijepa_vit_huge, vit_giant as ijepa_vit_giant
 
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
+    recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .linear_head import LinearHead
 from src.imagenet import imagenet
@@ -52,10 +53,10 @@ class Evaluation():
         self.wd_values = []
 
         if self.continue_training:
-            self.last_epoch = self._get_last_epoch()
-            self._step_schedulers_to_epoch(self.last_epoch)
-            self._recreate_csv_log()
-            self._load_last_values()
+            self.last_epoch = get_last_epoch(self.output_folder)
+            step_schedulers_to_epoch(self.last_epoch, len(self.train_dataloader), self.lr_scheduler, self.wd_scheduler)
+            recreate_csv_log(self.output_folder, self.last_epoch)
+            self.lr_values, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
     
@@ -205,66 +206,6 @@ class Evaluation():
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(self.encoder.module.state_dict() if self.world_size > 1 and self.meta_mode == "fine_tuning" else self.encoder.state_dict(), os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
             torch.save(self.linear_head.module.state_dict() if self.world_size > 1 else self.linear_head.state_dict(), os.path.join(self.output_folder, "models", f"linear_head_epoch_{epoch}.pth"))
-    
-    def _recreate_csv_log(self):
-        if not is_main_process():
-            return
-
-        csv_path = os.path.join(self.output_folder, "log.csv")
-        with open(csv_path, "r") as f:
-            lines = f.readlines()
-
-        new_lines = lines[:1] + [line for line in lines[1:] if int(line.split(",")[1]) <= self.last_epoch]
-
-        with open(csv_path, "w") as f:
-            f.writelines(new_lines)
-
-    def _get_last_epoch(self):
-        last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")
-        if not os.path.exists(last_epoch_path):
-            return 0
-        
-        with open(last_epoch_path, "r") as f:
-            last_epoch_data = json.load(f)
-        
-        return last_epoch_data.get("last_epoch", 0)
-
-    def _step_schedulers_to_epoch(self, epoch):
-        if epoch == 0:
-            return
-        
-        steps_per_epoch = len(self.train_dataloader)
-        total_steps = epoch * steps_per_epoch
-
-        for _ in range(total_steps):
-            self.lr_scheduler.step()
-            self.wd_scheduler.step()
-    
-    def _load_last_values(self):
-        def _as_history_list(value):
-            if isinstance(value, list):
-                return value
-            if value is None:
-                return []
-            return [float(value)]
-
-        csv_path = os.path.join(self.output_folder, "log.csv")
-        with open(csv_path, "r") as f:
-            lines = f.readlines()[1:]
-        
-        for line in lines:
-            epoch = line.split(",")[1]
-            lr = line.split(",")[4]
-            wd = line.split(",")[5]
-            if int(epoch) <= self.last_epoch:
-                self.lr_values.append(float(lr))
-                self.wd_values.append(float(wd))
-        
-        training_info_json = json.load(open(os.path.join(self.output_folder, "training_info.json"), "r"))
-        self.train_loss = _as_history_list(training_info_json.get("train_loss", []))
-        if self.has_val():
-            self.val_loss = _as_history_list(training_info_json.get("val_loss", []))
-            self.val_accuracy = _as_history_list(training_info_json.get("val_accuracy", []))
 
     def _load_models(self):
         def __try_load_models():

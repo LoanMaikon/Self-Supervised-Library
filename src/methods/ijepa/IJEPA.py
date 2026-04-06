@@ -10,7 +10,8 @@ import json
 import os
 
 from .models import repeat_interleave_batch, vit_predictor, vit_tiny, vit_small, vit_base, vit_large, vit_huge, vit_giant, apply_masks, repeat_interleave_batch
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
+    recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
 from .mask_collator import MaskCollator
 from src.imagenet import imagenet
@@ -47,10 +48,10 @@ class IJEPA():
         self.ema_values = []
 
         if self.continue_training:
-            self.last_epoch = self._get_last_epoch()
-            self._step_schedulers_to_epoch(self.last_epoch)
-            self._recreate_csv_log()
-            self._load_last_values()
+            self.last_epoch = get_last_epoch(self.output_folder)
+            step_schedulers_to_epoch(self.last_epoch, len(self.train_dataloader), self.lr_scheduler, self.wd_scheduler, self.ema_scheduler)
+            recreate_csv_log(self.output_folder, self.last_epoch)
+            self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
@@ -142,59 +143,6 @@ class IJEPA():
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
             torch.save(predictor_state_dict, os.path.join(self.output_folder, "models", f"predictor_epoch_{epoch}.pth"))
             torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder_epoch_{epoch}.pth"))
-    
-    def _recreate_csv_log(self):
-        if not is_main_process():
-            return
-
-        csv_path = os.path.join(self.output_folder, "log.csv")
-        with open(csv_path, "r") as f:
-            lines = f.readlines()
-
-        new_lines = lines[:1] + [line for line in lines[1:] if int(line.split(",")[1]) <= self.last_epoch]
-
-        with open(csv_path, "w") as f:
-            f.writelines(new_lines)
-
-    def _get_last_epoch(self):
-        last_epoch_path = os.path.join(self.output_folder, "last_epoch.json")
-        if not os.path.exists(last_epoch_path):
-            return 0
-        
-        with open(last_epoch_path, "r") as f:
-            last_epoch_data = json.load(f)
-        
-        return last_epoch_data.get("last_epoch", 0)
-
-    def _step_schedulers_to_epoch(self, epoch):
-        if epoch == 0:
-            return
-        
-        steps_per_epoch = len(self.train_dataloader)
-        total_steps = epoch * steps_per_epoch
-
-        for _ in range(total_steps):
-            self.lr_scheduler.step()
-            self.wd_scheduler.step()
-            self.ema_scheduler.step()
-    
-    def _load_last_values(self):
-        csv_path = os.path.join(self.output_folder, "log.csv")
-        with open(csv_path, "r") as f:
-            lines = f.readlines()[1:]
-        
-        for line in lines:
-            epoch = line.split(",")[1]
-            lr = line.split(",")[4]
-            wd = line.split(",")[5]
-            ema = line.split(",")[6]
-            if int(epoch) <= self.last_epoch:
-                self.lr_values.append(float(lr))
-                self.wd_values.append(float(wd))
-                self.ema_values.append(float(ema))
-        
-        training_info_json = json.load(open(os.path.join(self.output_folder, "training_info.json"), "r"))
-        self.train_loss = training_info_json.get("train_loss", [])
     
     def update_target_network(self, ema):
         with torch.no_grad():

@@ -6,6 +6,7 @@ import os
 from src.methods.evaluation.Evaluation import Evaluation
 from src.methods.simclr.SimCLR import SimCLR
 from src.methods.ijepa.IJEPA import IJEPA
+from src.methods.swav.SwAV import SwAV
 from src.methods.byol.BYOL import BYOL
 from src.utils import is_main_process
 
@@ -96,6 +97,16 @@ class Model():
 
             case "ijepa":
                 self.method = IJEPA(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    continue_training=self.continue_training,
+                )
+            
+            case "swav":
+                self.method = SwAV(
                     opened_config=self.config,
                     output_folder=self.output_folder,
                     device=self.device,

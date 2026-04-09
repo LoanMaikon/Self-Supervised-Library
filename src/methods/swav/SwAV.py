@@ -168,11 +168,14 @@ class SwAV():
         self.queue = torch.zeros(self.data_global_views_num, self.optimization_queue_length, self.meta_projection_dim).to(self.device)
 
     def load_queue_from_last_epoch(self):
+        if self.last_epoch < self.optimization_queue_start_epoch:
+            return
+
         queue_path = os.path.join(self.output_folder, "queue", f"queue.pth")
         if os.path.exists(queue_path):
             self.queue = torch.load(queue_path, map_location=self.device)
         else:
-            write_on_log(f"Queue file not found at {queue_path}. Starting with an empty queue.", self.output_folder)
+            raise FileNotFoundError(f"Queue file not found at {queue_path} for loading queue from last epoch.")
 
     def _load_schedulers(self):
         self.lr_scheduler = WarmupCosineSchedule(

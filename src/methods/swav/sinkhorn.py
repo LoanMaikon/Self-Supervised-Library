@@ -3,6 +3,8 @@
 import torch
 import torch.distributed as dist
 
+from src.utils import is_distributed
+
 @torch.no_grad()
 def sinkhorn(features, epsilon, sinkhorn_iterations, world_size):
     Q = torch.exp(features / epsilon).t() # Q is K-by-B for consistency with notations from our paper
@@ -11,13 +13,15 @@ def sinkhorn(features, epsilon, sinkhorn_iterations, world_size):
 
     # make the matrix sums to 1
     sum_Q = torch.sum(Q)
-    dist.all_reduce(sum_Q)
+    if is_distributed():
+        dist.all_reduce(sum_Q)
     Q /= sum_Q
 
     for it in range(sinkhorn_iterations):
         # normalize each row: total weight per prototype must be 1/K
         sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
-        dist.all_reduce(sum_of_rows)
+        if is_distributed():
+            dist.all_reduce(sum_of_rows)
         Q /= sum_of_rows
         Q /= K
 

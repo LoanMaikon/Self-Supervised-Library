@@ -206,7 +206,10 @@ class ResNet(nn.Module):
             )
 
         # prototype layer
-        self.prototypes = nn.Linear(output_dim, nmb_prototypes, bias=False)
+        if output_dim > 0 and nmb_prototypes > 0:
+            self.prototypes = nn.Linear(output_dim, nmb_prototypes, bias=False)
+        else:
+            self.prototypes = None
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

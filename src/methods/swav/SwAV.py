@@ -3,6 +3,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
 import torch.optim as optim
 import torch.nn as nn
+import numpy as np
 import torch
 import copy
 import json
@@ -40,6 +41,7 @@ class SwAV():
         self._load_dataloader()
         self._load_optimizer()
         self._load_schedulers()
+        self._load_queue()
 
         self.train_loss = []
 
@@ -51,6 +53,7 @@ class SwAV():
             step_schedulers_to_epoch(self.last_epoch, len(self.train_dataloader), self.lr_scheduler, self.wd_scheduler)
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
+            self.load_queue_from_last_epoch()
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
@@ -78,36 +81,44 @@ class SwAV():
                     self.prototypes.module.prototypes.weight.copy_(w) if self.world_size > 1 else self.prototypes.prototypes.weight.copy_(w)
 
                 images = [img.to(self.device, non_blocking=True) for img in images]
+                bs = images[0].size(0)
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                    z = self.encoder(images)
-                    z = self.projection_head(z)
-                    z = nn.functional.normalize(z, dim=1, p=2)
-                    z = self.prototypes(z)
+                    feats = self.encoder(images)
+                    emb = self.projection_head(feats)
+                    emb = nn.functional.normalize(emb, dim=1, p=2)
+                    out = self.prototypes(emb)
 
                     loss = 0
-                    for v in range(self.data_global_views_num + self.data_local_views_num):
-                        out = z[v * self.data_batch_size: (v + 1) * self.data_batch_size]
-                        
-                        q = sinkhorn(out, self.optimization_sinkhorn_epsilon, self.optimization_sinkhorn_iterations, self.world_size)
+                    for i, crop_id in enumerate(range(self.data_global_views_num)):
+                        with torch.no_grad():
+                            out_i = out[bs * crop_id : bs * (crop_id + 1)]
+
+                            if epoch >= self.optimization_queue_start_epoch:
+                                proto_w = self.prototypes.module.prototypes.weight if self.world_size > 1 else self.prototypes.prototypes.weight
+                                queue_logits = torch.mm(self.queue[i], proto_w.t())
+                                out_i = torch.cat((queue_logits, out_i), dim=0)
+
+                                self.queue[i, bs:] = self.queue[i, :-bs].clone()
+                                self.queue[i, :bs] = emb[bs * crop_id : bs * (crop_id + 1)]
+
+                            q = sinkhorn(out_i, self.optimization_sinkhorn_epsilon, self.optimization_sinkhorn_iterations, self.world_size)
+                            q = q[-bs:] if epoch >= self.optimization_queue_start_epoch else q
 
                         subloss = 0
-                        for v2 in range(self.data_global_views_num + self.data_local_views_num):
-                            if v2 == v:
-                                continue
-                            
-                            out2 = z[v2 * self.data_batch_size: (v2 + 1) * self.data_batch_size]
-                            subloss -= torch.mean(torch.sum(q * torch.log_softmax(out2 / self.optimization_temperature, dim=1), dim=1))
+                        for v in np.delete(np.arange(self.data_global_views_num + self.data_local_views_num), crop_id):
+                            x = out[bs * v : bs * (v + 1)] / self.optimization_temperature
+                            subloss -= torch.mean(torch.sum(q * torch.log_softmax(x, dim=1), dim=1))
                         loss += subloss / (self.data_global_views_num + self.data_local_views_num - 1)
-                    loss /= (self.data_global_views_num + self.data_local_views_num)
+                    loss /= self.data_global_views_num
 
                 scaler.scale(loss).backward()
                 scaler.step(self.optimizer)
                 scaler.update()
 
                 loss_value = loss.item()
-                self.train_loss[-1] += loss_value * images[0].size(0)
-                num_samples += images[0].size(0)
+                self.train_loss[-1] += loss_value * bs
+                num_samples += bs
 
                 self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())
@@ -116,19 +127,18 @@ class SwAV():
 
                 self.lr_scheduler.step()
                 self.wd_scheduler.step()
-            
+
             self.train_loss[-1] /= num_samples
 
             self.save_models(epoch)
 
             write_on_log(f"Loss: {self.train_loss[-1]}", self.output_folder)
 
-            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
-            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
-            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
+            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", "loss", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", "learning_rate", self.output_folder)
+            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", "weight_decay", self.output_folder)
 
             save_json({"train_loss": self.train_loss}, self.output_folder, "training_info")
-
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
             write_on_log("", self.output_folder)
@@ -146,11 +156,23 @@ class SwAV():
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))
         torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", "prototypes.pth"))
+        torch.save(self.queue, os.path.join(self.output_folder, "queue", "queue.pth"))
 
         if epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
             torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head_epoch_{epoch}.pth"))
             torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", f"prototypes_epoch_{epoch}.pth"))
+            torch.save(self.queue, os.path.join(self.output_folder, "queue", f"queue_epoch_{epoch}.pth"))
+
+    def _load_queue(self):
+        self.queue = torch.zeros(self.data_global_views_num, self.optimization_queue_length, self.meta_projection_dim).to(self.device)
+
+    def load_queue_from_last_epoch(self):
+        queue_path = os.path.join(self.output_folder, "queue", f"queue.pth")
+        if os.path.exists(queue_path):
+            self.queue = torch.load(queue_path, map_location=self.device)
+        else:
+            write_on_log(f"Queue file not found at {queue_path}. Starting with an empty queue.", self.output_folder)
 
     def _load_schedulers(self):
         self.lr_scheduler = WarmupCosineSchedule(
@@ -186,6 +208,12 @@ class SwAV():
                         'weight_decay': self.optimization_weight_decay[0],
                     },
                     {
+                        'params': (p for n, p in self.prototypes.named_parameters()
+                                if ('bias' not in n) and (len(p.shape) != 1)),
+                        'layer_adaptation': True,
+                        'weight_decay': self.optimization_weight_decay[0],
+                    },
+                    {
                         'params': (p for n, p in self.encoder.named_parameters()
                                 if ('bias' in n) or (len(p.shape) == 1)),
                         'WD_exclude': True,
@@ -196,7 +224,13 @@ class SwAV():
                                 if ('bias' in n) or (len(p.shape) == 1)),
                         'WD_exclude': True,
                         'weight_decay': 0,
-                    }
+                    },
+                    {
+                        'params': (p for n, p in self.prototypes.named_parameters()
+                                if ('bias' in n) or (len(p.shape) == 1)),
+                        'WD_exclude': True,
+                        'weight_decay': 0,
+                    },
                 ]
                 
                 self.base_optimizer = optim.SGD(param_groups, lr=self.optimization_lr[0], momentum=0.9)
@@ -231,10 +265,18 @@ class SwAV():
         )
 
     def _load_transform(self):
+        # Pseudo code of Apendix A from SimCLR paper
+        def __get_color_distortion(strength=1.0):
+            collor_jitter = v2.ColorJitter(0.8 * strength, 0.8 * strength, 0.8 * strength, 0.2 * strength)
+            rnd_color_jitter = v2.RandomApply([collor_jitter], p=0.8)
+            rnd_gray = v2.RandomGrayscale(p=0.2)
+
+            return v2.Compose([rnd_color_jitter, rnd_gray])
+        
         self.global_transform = v2.Compose([
             v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
             v2.RandomHorizontalFlip() if self.data_global_views_horizontal_flip else v2.Identity(),
-            v2.ColorJitter(0.8, 0.8, 0.8, 0.2) if self.data_global_views_color_jitter else v2.Identity(),
+            __get_color_distortion() if self.data_global_views_color_jitter else v2.Identity(),
             v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1) if self.data_global_views_gaussian_blur else v2.Identity(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)
@@ -243,7 +285,7 @@ class SwAV():
         self.local_transform = v2.Compose([
             v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio)),
             v2.RandomHorizontalFlip() if self.data_local_views_horizontal_flip else v2.Identity(),
-            v2.ColorJitter(0.8, 0.8, 0.8, 0.2) if self.data_local_views_color_jitter else v2.Identity(),
+            __get_color_distortion() if self.data_local_views_color_jitter else v2.Identity(),
             v2.GaussianBlur(kernel_size=int(0.1 * self.data_local_views_crop_size) * 2 + 1) if self.data_local_views_gaussian_blur else v2.Identity(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)
@@ -363,5 +405,7 @@ class SwAV():
         self.optimization_sinkhorn_epsilon = float(self.config["optimization"]["sinkhorn_epsilon"])
         self.optimization_sinkhorn_iterations = int(self.config["optimization"]["sinkhorn_iterations"])
         self.optimization_num_prototypes = int(self.config["optimization"]["num_prototypes"])
+        self.optimization_queue_length = int(self.config["optimization"]["queue_length"])
+        self.optimization_queue_start_epoch = int(self.config["optimization"]["queue_start_epoch"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

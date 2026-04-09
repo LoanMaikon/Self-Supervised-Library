@@ -58,9 +58,10 @@ class Model():
         
         self.mode = self.config["mode"]
 
-        if self.mode == "evaluate" and not os.path.exists(self.evaluate_weights):
-            raise ValueError(f"Checkpoint file '{self.evaluate_weights}' does not exist for evaluation.")
-        if self.mode != "evaluate" and self.evaluate_weights is not None:
+        if self.mode == "evaluate":
+            if (self.evaluate_weights not in ["supervised_resnet50", "random_resnet50"]) and (not os.path.exists(self.evaluate_weights)):
+                raise ValueError(f"'{self.evaluate_weights}' does not exist for evaluation.")
+        elif self.mode != "evaluate" and self.evaluate_weights is not None:
             raise ValueError(f"--evaluate_weights should not be passed when mode is not 'evaluate'.")
 
         match self.mode:

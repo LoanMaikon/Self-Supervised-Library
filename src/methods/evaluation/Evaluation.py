@@ -11,6 +11,7 @@ from src.methods.simclr.resnet import resnet50 as simclr_resnet50
 from src.methods.swav.resnet import resnet50 as swav_resnet50
 from src.methods.ijepa.models import vit_tiny as ijepa_vit_tiny, vit_small as ijepa_vit_small, vit_base as ijepa_vit_base, \
     vit_large as ijepa_vit_large, vit_huge as ijepa_vit_huge, vit_giant as ijepa_vit_giant
+from .resnet50 import resnet50 as resnet50_eval
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
@@ -210,6 +211,13 @@ class Evaluation():
 
     def _load_models(self):
         def __try_load_models():
+            if self.evaluate_weights == "supervised_resnet50":
+                self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=True)
+                return
+            elif self.evaluate_weights == "random_resnet50":
+                self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=False)
+                return
+
             errors = []
 
             try:

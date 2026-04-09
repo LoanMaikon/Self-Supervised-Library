@@ -8,6 +8,7 @@ import os
 
 from src.methods.byol.resnet import resnet50 as byol_resnet50, resnet200 as byol_resnet200
 from src.methods.simclr.resnet import resnet50 as simclr_resnet50
+from src.methods.swav.resnet import resnet50 as swav_resnet50
 from src.methods.ijepa.models import vit_tiny as ijepa_vit_tiny, vit_small as ijepa_vit_small, vit_base as ijepa_vit_base, \
     vit_large as ijepa_vit_large, vit_huge as ijepa_vit_huge, vit_giant as ijepa_vit_giant
 
@@ -260,7 +261,6 @@ class Evaluation():
             except Exception as e:
                 errors.append(("ijepa_vit_small_14", str(e)))
 
-
             try:
                 self.encoder = ijepa_vit_base(checkpoint=self.meta_checkpoint, patch_size=16)
                 self.encoder.load_weights(self.evaluate_weights, device=self.device)
@@ -316,6 +316,13 @@ class Evaluation():
                 return
             except Exception as e:
                 errors.append(("ijepa_vit_giant_14", str(e)))
+            
+            try:
+                self.encoder = swav_resnet50(self.meta_checkpoint)
+                self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                return
+            except Exception as e:
+                errors.append(("swav_resnet50", str(e)))
 
             raise ValueError(
                 f"Failed to load weights from {self.evaluate_weights}. Errors: {errors}."

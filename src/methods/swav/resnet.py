@@ -276,11 +276,20 @@ class ResNet(nn.Module):
         clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 
         errors = []
+
         try:
             self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
             errors.append(("projection_head", str(e)))
+        
+        try:
+            self.remove_unnecessary_modules()
+            self.remove_projection_head()
+            self.load_state_dict(clean_state_dict, strict=False)
+            return
+        except Exception as e:
+            errors.append(("remove_unnecessary_modules", str(e)))
         
         raise ValueError(
             f"Failed to load weights from {weight_path}. "

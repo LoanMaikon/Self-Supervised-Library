@@ -106,7 +106,7 @@ def load_last_values(output_folder, last_epoch):
         epoch = line.split(",")[1]
         lr = line.split(",")[4]
         wd = line.split(",")[5]
-        ema = line.split(",")[6]
+        ema = line.split(",")[6].strip()
         if int(epoch) <= last_epoch:
             lr_values.append(float(lr))
             wd_values.append(float(wd))

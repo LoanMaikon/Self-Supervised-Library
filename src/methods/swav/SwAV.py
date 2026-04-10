@@ -158,7 +158,7 @@ class SwAV():
         torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", "prototypes.pth"))
         torch.save(self.queue, os.path.join(self.output_folder, "queue", "queue.pth"))
 
-        if epoch % self.meta_save_every == 0:
+        if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
             torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head_epoch_{epoch}.pth"))
             torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", f"prototypes_epoch_{epoch}.pth"))

@@ -18,6 +18,18 @@ data:
       - 0.229
       - 0.224
       - 0.225
+  horizontal_flip:
+    use: true
+    p: 0.5
+  random_resized_crop:
+    use: true
+    p: 1.0
+    scale:
+    - 0.08
+    - 1.0
+    ratio:
+    - 3.0/4.0
+    - 4.0/3.0
   separate_val_subset:
     use: true
     size: 0.1

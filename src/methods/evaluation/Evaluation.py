@@ -370,9 +370,22 @@ class Evaluation():
 
     def _load_transform(self):
         self.train_transform = v2.Compose([
-            v2.Resize((self.data_crop_size, self.data_crop_size)) if not self.data_random_resized_crop_use else v2.RandomResizedCrop(size=self.data_crop_size, scale=self.data_random_resized_crop_scale, ratio=self.data_random_resized_crop_ratio, p=self.data_random_resized_crop_p),
+            v2.RandomApply(
+                [v2.RandomResizedCrop(
+                    size=self.data_crop_size,
+                    scale=self.data_random_resized_crop_scale,
+                    ratio=self.data_random_resized_crop_ratio
+                )],
+                p=self.data_random_resized_crop_p
+            ) if self.data_random_resized_crop_use else v2.Resize((self.data_crop_size, self.data_crop_size)),
+
             v2.RandomHorizontalFlip(p=self.data_horizontal_flip_p) if self.data_horizontal_flip_use else v2.Identity(),
-            v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
+
+            v2.Compose([
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True)
+            ]),
+
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
 
@@ -559,12 +572,12 @@ class Evaluation():
         self.data_normalize_std = list(map(float, self.config["data"]["normalize"]["std"]))
         self.data_separate_val_subset_use = bool(self.config["data"]["separate_val_subset"]["use"])
         self.data_separate_val_subset_size = float(self.config["data"]["separate_val_subset"]["size"])
-        self.data_horizontal_flip_use = bool(self.config["data_augmentation"]["horizontal_flip"]["use"])
-        self.data_horizontal_flip_p = float(self.config["data_augmentation"]["horizontal_flip"]["p"])
-        self.data_random_resized_crop_use = bool(self.config["data_augmentation"]["random_resized_crop"]["use"])
-        self.data_random_resized_crop_p = float(self.config["data_augmentation"]["random_resized_crop"]["p"])
-        self.data_random_resized_crop_scale = list(map(float, self.config["data_augmentation"]["random_resized_crop"]["scale"]))
-        self.data_random_resized_crop_ratio = list(map(float, self.config["data_augmentation"]["random_resized_crop"]["ratio"]))
+        self.data_horizontal_flip_use = bool(self.config["data"]["horizontal_flip"]["use"])
+        self.data_horizontal_flip_p = float(self.config["data"]["horizontal_flip"]["p"])
+        self.data_random_resized_crop_use = bool(self.config["data"]["random_resized_crop"]["use"])
+        self.data_random_resized_crop_p = float(self.config["data"]["random_resized_crop"]["p"])
+        self.data_random_resized_crop_scale = list(map(float, self.config["data"]["random_resized_crop"]["scale"]))
+        self.data_random_resized_crop_ratio = list(map(float, self.config["data"]["random_resized_crop"]["ratio"]))
 
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
         self.meta_mode = str(self.config["meta"]["mode"])

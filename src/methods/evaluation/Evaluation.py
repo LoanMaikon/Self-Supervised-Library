@@ -148,13 +148,13 @@ class Evaluation():
                 plot_fig(range(len(self.val_accuracy)), "Epoch", self.val_accuracy, "Accuracy", f"val_accuracy", self.output_folder)
 
                 save_json({
-                    "train_loss": self.train_loss[-1],
-                    "val_loss": self.val_loss[-1],
-                    "val_accuracy": self.val_accuracy[-1]
+                    "train_loss": self.train_loss,
+                    "val_loss": self.val_loss,
+                    "val_accuracy": self.val_accuracy
                 }, self.output_folder, "training_info")
             else:
                 save_json({
-                    "train_loss": self.train_loss[-1],
+                    "train_loss": self.train_loss,
                 }, self.output_folder, "training_info")
 
             self.save_models(epoch)

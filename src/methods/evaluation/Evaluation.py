@@ -76,7 +76,7 @@ class Evaluation():
             self.train_loss.append(0.0)
             num_samples = 0
 
-            self.encoder.train()
+            self.encoder.train() if self.meta_mode == "fine_tuning" else self.encoder.eval()
             self.linear_head.train()
             for iteration, (images, labels) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
@@ -84,8 +84,13 @@ class Evaluation():
                 images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                    features = self.encoder(images)
-                    features = self.encoder.get_features(features)
+                    if self.meta_mode == "linear_eval":
+                        with torch.no_grad():
+                            features = self.encoder(images)
+                            features = self.encoder.get_features(features)
+                    else:
+                        features = self.encoder(images)
+                        features = self.encoder.get_features(features)
                     output = self.linear_head(features)
                     loss = self.apply_criterion(output, labels)
 
@@ -165,6 +170,10 @@ class Evaluation():
     
     def test(self):
         write_on_log("Starting testing...", self.output_folder)
+
+        if os.path.exists(os.path.join(self.output_folder, "test_results.json")):
+            write_on_log("Test results already exist. Skipping testing.", self.output_folder)
+            return
 
         self.encoder.eval()
         self.linear_head.eval()
@@ -485,32 +494,48 @@ class Evaluation():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "sgd":
-                param_groups = [
-                    {
-                        'params': (p for n, p in self.encoder.named_parameters()
-                                if ('bias' not in n) and (len(p.shape) != 1)),
-                        'layer_adaptation': True,
-                        'weight_decay': self.optimization_weight_decay[0],
-                    },
-                    {
-                        'params': (p for n, p in self.linear_head.named_parameters()
-                                if ('bias' not in n) and (len(p.shape) != 1)),
-                        'layer_adaptation': True,
-                        'weight_decay': self.optimization_weight_decay[0],
-                    },
-                    {
-                        'params': (p for n, p in self.encoder.named_parameters()
-                                if ('bias' in n) or (len(p.shape) == 1)),
-                        'WD_exclude': True,
-                        'weight_decay': 0,
-                    },
-                    {
-                        'params': (p for n, p in self.linear_head.named_parameters()
-                                if ('bias' in n) or (len(p.shape) == 1)),
-                        'WD_exclude': True,
-                        'weight_decay': 0,
-                    },
-                ]
+                if self.meta_mode == "linear_eval":
+                    param_groups = [
+                        {
+                            'params': (p for n, p in self.linear_head.named_parameters()
+                                    if ('bias' not in n) and (len(p.shape) != 1)),
+                            'layer_adaptation': True,
+                            'weight_decay': self.optimization_weight_decay[0],
+                        },
+                        {
+                            'params': (p for n, p in self.linear_head.named_parameters()
+                                    if ('bias' in n) or (len(p.shape) == 1)),
+                            'WD_exclude': True,
+                            'weight_decay': 0,
+                        },
+                    ]
+                else:
+                    param_groups = [
+                        {
+                            'params': (p for n, p in self.encoder.named_parameters()
+                                    if ('bias' not in n) and (len(p.shape) != 1)),
+                            'layer_adaptation': True,
+                            'weight_decay': self.optimization_weight_decay[0],
+                        },
+                        {
+                            'params': (p for n, p in self.linear_head.named_parameters()
+                                    if ('bias' not in n) and (len(p.shape) != 1)),
+                            'layer_adaptation': True,
+                            'weight_decay': self.optimization_weight_decay[0],
+                        },
+                        {
+                            'params': (p for n, p in self.encoder.named_parameters()
+                                    if ('bias' in n) or (len(p.shape) == 1)),
+                            'WD_exclude': True,
+                            'weight_decay': 0,
+                        },
+                        {
+                            'params': (p for n, p in self.linear_head.named_parameters()
+                                    if ('bias' in n) or (len(p.shape) == 1)),
+                            'WD_exclude': True,
+                            'weight_decay': 0,
+                        },
+                    ]
 
                 self.optimizer = optim.SGD(
                     param_groups,

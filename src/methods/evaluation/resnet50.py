@@ -13,6 +13,12 @@ class ResNet50(nn.Module):
         
         self.backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2) if self.pretrained else models.resnet50(weights=None)
     
+    def get_features(self, features):
+        return features
+
+    def get_output_dim(self):
+        return 2048
+
     def remove_classifier_head(self):
         self.backbone.fc = nn.Identity()
     

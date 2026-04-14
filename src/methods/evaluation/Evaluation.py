@@ -2,6 +2,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
 import torch.optim as optim
+import torch.distributed as dist
 import torch
 import json
 import os
@@ -196,6 +197,12 @@ class Evaluation():
                 test_loss += loss.item() * images.size(0)
                 test_accuracy += accuracy * images.size(0)
                 num_samples += images.size(0)
+
+        if dist.is_available() and dist.is_initialized():
+            metrics = torch.tensor([test_loss, test_accuracy, float(num_samples)], device=self.device)
+            dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
+            test_loss, test_accuracy, num_samples = metrics.tolist()
+            num_samples = int(num_samples)
 
         test_loss /= num_samples
         test_accuracy /= num_samples
@@ -398,8 +405,10 @@ class Evaluation():
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
 
+        test_resize_size = int(round(self.data_crop_size * 256 / 224))
         self.test_transform = v2.Compose([
-            v2.Resize((self.data_crop_size, self.data_crop_size)),
+            v2.Resize(test_resize_size),
+            v2.CenterCrop(self.data_crop_size),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])

@@ -53,7 +53,7 @@ class LARS(object):
                     grad_norm = torch.norm(p.grad.data)
                     adaptive_lr = 1.0
 
-                    if param_norm != 0 and grad_norm != 0 and group.get('layer_adaptation', True):
+                    if param_norm != 0 and grad_norm != 0 and group.get('layer_adaptation', False):
                         adaptive_lr = self.trust_coefficient * param_norm / grad_norm
 
                     p.grad.data *= adaptive_lr

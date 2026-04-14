@@ -1,7 +1,7 @@
 mode: ijepa
 
 data:
-  datasets_path: /disk2/lmk22/datasets
+  datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
   batch_size: 512 # For each device, so the effective batch size is batch_size * num_devices
   crop_size: 224
@@ -37,7 +37,7 @@ mask:
   - 0.2
 
 meta:
-  model_name: vit_tiny
+  model_name: vit_small
   checkpoint: false
   predictor_depth: 6
   predictor_emb_dim: 384

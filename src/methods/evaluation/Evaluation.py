@@ -144,6 +144,16 @@ class Evaluation():
                         self.val_loss[-1] += loss.item() * images.size(0)
                         self.val_accuracy[-1] += accuracy * images.size(0)
 
+                if dist.is_available() and dist.is_initialized():
+                    val_metrics = torch.tensor(
+                        [self.val_loss[-1], self.val_accuracy[-1], float(num_samples)],
+                        device=self.device,
+                        dtype=torch.float64,
+                    )
+                    dist.all_reduce(val_metrics, op=dist.ReduceOp.SUM)
+                    self.val_loss[-1], self.val_accuracy[-1], num_samples = val_metrics.tolist()
+                    num_samples = int(num_samples)
+
                 self.val_loss[-1] /= num_samples
                 self.val_accuracy[-1] /= num_samples
 

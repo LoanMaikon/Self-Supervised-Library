@@ -148,6 +148,7 @@ class SwAV():
             return
     
         os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
+        os.makedirs(os.path.join(self.output_folder, "queue"), exist_ok=True)
 
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
         projection_head_state_dict = self.projection_head.module.state_dict() if self.world_size > 1 else self.projection_head.state_dict()

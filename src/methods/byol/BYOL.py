@@ -297,9 +297,6 @@ class BYOL():
                     out_dim=self.meta_projection_dim
                 )
 
-                self.target_encoder = copy.deepcopy(self.encoder)
-                self.target_encoder_projection_head = copy.deepcopy(self.encoder_projection_head)
-
             case _:
                 raise ValueError(f"Unsupported model name: {self.meta_model_name}")
         
@@ -311,6 +308,10 @@ class BYOL():
                 )
             else:
                 raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
+            
+        self.target_encoder = copy.deepcopy(self.encoder)
+        self.target_encoder_projection_head = copy.deepcopy(self.encoder_projection_head)
+        self.target_encoder.checkpoint = False # Target model should not use checkpointing
         
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
@@ -327,11 +328,11 @@ class BYOL():
                     device=self.device
                 )
                 self.target_encoder.load_weights(
-                    weight_path=os.path.join(self.output_folder, "models", "encoder.pth"),
+                    weight_path=os.path.join(self.output_folder, "models", "target_encoder.pth"),
                     device=self.device
                 )
                 self.target_encoder_projection_head.load_weights(
-                    weight_path=os.path.join(self.output_folder, "models", "projection_head.pth"),
+                    weight_path=os.path.join(self.output_folder, "models", "target_projection_head.pth"),
                     device=self.device
                 )
             else:

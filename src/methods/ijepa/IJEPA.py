@@ -291,9 +291,6 @@ class IJEPA():
                                        checkpoint=self.meta_checkpoint,                 
                                        )
 
-        self.target_encoder = copy.deepcopy(self.encoder)
-        self.target_encoder.checkpoint = False # Target model should not use checkpointing
-
         if self.meta_pretrained_weights is not None:
             if os.path.exists(self.meta_pretrained_weights):
                 self.encoder.load_weights(
@@ -302,6 +299,9 @@ class IJEPA():
                 )
             else:
                 raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
+        
+        self.target_encoder = copy.deepcopy(self.encoder)
+        self.target_encoder.checkpoint = False # Target model should not use checkpointing
 
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):

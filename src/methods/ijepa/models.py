@@ -1,11 +1,12 @@
+# Using as base https://github.com/facebookresearch/ijepa/blob/main/src/models/vision_transformer.py
+
 import torch.nn.functional as F
+from functools import partial
 import torch.nn as nn
 import torch
-import numpy as np
 import math
-from functools import partial
 
-# Using as base https://github.com/facebookresearch/ijepa/blob/main/src/models/vision_transformer.py
+from src.pos_embed import get_2d_sincos_pos_embed
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
@@ -86,60 +87,6 @@ class PatchEmbedding(nn.Module):
         # self.proj(x).flatten(2).shape = [B, D, N]
         # self.proj(x).flatten(2).transpose(1, 2).shape = [B, N, D] = Batch, Tokens (patches), Embedding
         return self.proj(x).flatten(2).transpose(1, 2)
-
-"""
-grid_size = grid height and width
-Return [grid_size * grid_size, embed_dim]
-"""
-def get_2d_sincos_pos_embed(embed_dim, grid_size):
-    """
-    Return the 2D sin-cos positional embedding.
-
-    Each token (patch) = 
-                        [ sin(x*f1), sin(x*f2), ..., cos(x*f1), ...
-                          sin(y*f1), sin(y*f2), ..., cos(y*f1), ... ]
-    where if embed_dim = 768, then the first 384 dimensions are for the x (width) position and the next 384 dimensions are for the y (height) position.
-    """
-    def _get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
-        assert embed_dim % 2 == 0
-
-        # Half of the embeddings are for the height and half for the width
-        emb_h = _get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
-        emb_w = _get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
-
-        emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
-        return emb
-
-    """
-    embed_dim: output dimension for each position
-    pos: a list of positions to be encoded: size (M,)
-    out: (M, D)
-    """
-    def _get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
-        assert embed_dim % 2 == 0
-
-        omega = np.arange(embed_dim // 2, dtype=float)
-        omega /= embed_dim / 2.
-        omega = 1. / 10000**omega   # (D/2,)
-
-        pos = pos.reshape(-1)   # (M,)
-        out = np.einsum('m,d->md', pos, omega)   # (M, D/2), outer product
-
-        emb_sin = np.sin(out)  # (M, D/2)
-        emb_cos = np.cos(out)  # (M, D/2)
-
-        emb = np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
-        return emb
-
-    grid_height = np.arange(grid_size, dtype=float)
-    grid_width = np.arange(grid_size, dtype=float)
-    grid = np.meshgrid(grid_width, grid_height)
-    grid = np.stack(grid, axis=0)
-
-    grid = grid.reshape([2, 1, grid_size, grid_size])
-    pos_embed = _get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
-
-    return pos_embed # pos_embed.shape = (num_patches, embed_dim)
 
 class Attention(nn.Module):
     def __init__(self, dim, num_heads, qkv_bias, qk_scale, attn_drop, proj_drop):
@@ -279,7 +226,7 @@ class VisionTransformer(nn.Module):
 
         # Positional embedding (not learnable)
         self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches, embed_dim), requires_grad=False)
-        values = get_2d_sincos_pos_embed(embed_dim, int(self.patch_embed.num_patches**0.5))
+        values = get_2d_sincos_pos_embed(embed_dim, int(self.patch_embed.num_patches**0.5), cls_token=False)
         self.pos_embed.data.copy_(torch.from_numpy(values).float().unsqueeze(0))
 
         # Create the transformer blocks
@@ -456,7 +403,7 @@ class VisionTransformerPredictor(nn.Module):
 
         # Create positional embedding for the predictor (not learnable)
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, predictor_embed_dim), requires_grad=False)
-        values = get_2d_sincos_pos_embed(predictor_embed_dim, int(num_patches ** 0.5))
+        values = get_2d_sincos_pos_embed(predictor_embed_dim, int(num_patches ** 0.5), cls_token=False)
         self.pos_embed.data.copy_(torch.from_numpy(values).float().unsqueeze(0))
 
         # Create the transformer blocks for the predictor
@@ -509,7 +456,7 @@ class VisionTransformerPredictor(nn.Module):
             self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
-            errors.append(("projection_head", str(e)))
+            errors.append(("ijepa", str(e)))
         
         raise ValueError(
             f"Failed to load weights from {weight_path}. "

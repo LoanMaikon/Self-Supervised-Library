@@ -3,7 +3,6 @@ from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
 import torch.optim as optim
 import torch
-import json
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \

@@ -6,11 +6,10 @@ import torch.optim as optim
 import torch.nn as nn
 import torch
 import copy
-import json
 import os
 
 from .models import repeat_interleave_batch, vit_predictor, vit_tiny, vit_small, vit_base, vit_large, vit_huge, vit_giant, apply_masks, repeat_interleave_batch
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
 from .mask_collator import MaskCollator

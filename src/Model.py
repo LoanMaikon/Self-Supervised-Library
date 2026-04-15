@@ -8,6 +8,8 @@ from src.methods.simclr.SimCLR import SimCLR
 from src.methods.ijepa.IJEPA import IJEPA
 from src.methods.swav.SwAV import SwAV
 from src.methods.byol.BYOL import BYOL
+from src.methods.mae.MAE import MAE
+
 from src.utils import is_main_process
 
 class Model():
@@ -116,5 +118,15 @@ class Model():
                     continue_training=self.continue_training,
                 )
 
+            case "mae":
+                self.method = MAE(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    continue_training=self.continue_training,
+                )
+
             case _:
-                raise ValueError(f"Unsupported mode '{self.mode}'. Supported modes are: linear_evaluation, fine_tuning, simclr, byol, ijepa.")
+                raise ValueError(f"Unsupported mode '{self.mode}'. Supported modes are: linear_evaluation, fine_tuning, simclr, byol, ijepa, swav and mae.")

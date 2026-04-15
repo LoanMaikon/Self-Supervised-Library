@@ -4,10 +4,9 @@ from torchvision.transforms import v2
 import torch.optim as optim
 import torch
 import copy
-import json
 import os
 
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
 from .resnet import resnet50, mlp_head

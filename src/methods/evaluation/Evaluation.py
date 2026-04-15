@@ -1,8 +1,8 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
-import torch.optim as optim
 import torch.distributed as dist
+import torch.optim as optim
 import torch
 import json
 import os
@@ -14,7 +14,7 @@ from src.methods.ijepa.models import vit_tiny as ijepa_vit_tiny, vit_small as ij
     vit_large as ijepa_vit_large, vit_huge as ijepa_vit_huge, vit_giant as ijepa_vit_giant
 from .resnet50 import resnet50 as resnet50_eval
 
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .linear_head import LinearHead

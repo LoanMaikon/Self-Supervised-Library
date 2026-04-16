@@ -8,7 +8,7 @@ import os
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
-from src.imagenet import imagenet
+from src.datasets import datasets
 from .models import mae_vit_tiny_patch16, mae_vit_small_patch16, mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge_patch14
 
 class MAE():
@@ -62,11 +62,13 @@ class MAE():
             self.train_loss.append(0.0)
             num_samples = 0
 
-            for iteration, (images, labels) in enumerate(self.train_dataloader):
+            for iteration, (images, _) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
 
+                images = images[0].to(self.device, non_blocking=True)
+
                 with torch.amp.autocast("cuda", dtype=torch.float16):
-                    loss, _, _ = self.model(images.to(self.device), mask_ratio=self.mask_mask_ratio, return_features=False)
+                    loss, _, _ = self.model(images, mask_ratio=self.mask_mask_ratio, return_features=False)
 
                 scaler.scale(loss).backward()
                 scaler.step(self.optimizer)
@@ -153,14 +155,14 @@ class MAE():
                 raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
 
     def _load_dataloader(self):
-        self.train_dataset = imagenet(
+        self.train_dataset = datasets(
             operation="train",
             datasets_folder_path=self.data_datasets_path,
             dataset_name=self.data_train_dataset,
-            transform=self.transform,
             separate_val_subset=self.data_separate_val_subset_use,
             val_size=self.data_separate_val_subset_size,
-            apply_data_augmentation=False,
+            transforms=[self.transform],
+            times=[1]
         )
 
         self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)

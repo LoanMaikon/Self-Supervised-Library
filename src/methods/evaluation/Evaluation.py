@@ -19,7 +19,7 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .linear_head import LinearHead
-from src.imagenet import imagenet
+from src.datasets import datasets
 
 class Evaluation():
     def __init__(self,
@@ -83,7 +83,8 @@ class Evaluation():
             for iteration, (images, labels) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
 
-                images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
+                images = images[0].to(self.device, non_blocking=True)
+                labels = labels.to(self.device, non_blocking=True)
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     if self.meta_mode == "linear_eval":
@@ -130,8 +131,9 @@ class Evaluation():
                 num_samples = 0
 
                 with torch.no_grad():
-                    for images, labels in self.val_dataloader:
-                        images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
+                    for (images, labels) in self.val_dataloader:
+                        images = images[0].to(self.device, non_blocking=True)
+                        labels = labels.to(self.device, non_blocking=True)
 
                         features = self.encoder(images)
                         features = self.encoder.get_features(features)
@@ -195,8 +197,9 @@ class Evaluation():
         num_samples = 0
 
         with torch.no_grad():
-            for images, labels in self.test_dataloader:
-                images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
+            for (images, labels) in self.test_dataloader:
+                images = images[0].to(self.device, non_blocking=True)
+                labels = labels.to(self.device, non_blocking=True)
 
                 features = self.encoder(images)
                 features = self.encoder.get_features(features)
@@ -453,9 +456,9 @@ class Evaluation():
 
         if self.world_size > 1:
             if self.meta_mode == "fine_tuning":
-                self.encoder.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+                self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
                 self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
-            self.linear_head.nn.SyncBatchNorm.convert_sync_batchnorm(self.linear_head)
+            self.linear_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.linear_head)
             self.linear_head = DDP(self.linear_head, device_ids=[self.rank], output_device=self.rank)
 
     def _load_transform(self):
@@ -488,14 +491,14 @@ class Evaluation():
         ])
 
     def _load_dataloader(self):
-        self.train_dataset = imagenet(
+        self.train_dataset = datasets(
             operation="train",
             datasets_folder_path=self.data_datasets_path,
             dataset_name=self.data_train_dataset,
-            transform=self.train_transform,
             separate_val_subset=self.data_separate_val_subset_use,
             val_size=self.data_separate_val_subset_size,
-            apply_data_augmentation=False,
+            transforms=[self.train_transform],
+            times=[1]
         )
 
         self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)
@@ -511,14 +514,14 @@ class Evaluation():
         )
 
         if self.data_separate_val_subset_use:
-            self.val_dataset = imagenet(
+            self.val_dataset = datasets(
                 operation="val",
                 datasets_folder_path=self.data_datasets_path,
                 dataset_name=self.data_train_dataset,
-                transform=self.test_transform,
-                separate_val_subset=True,
+                separate_val_subset=self.data_separate_val_subset_use,
                 val_size=self.data_separate_val_subset_size,
-                apply_data_augmentation=False,
+                transforms=[self.test_transform],
+                times=[1]
             )
 
             self.val_sampler = DistributedSampler(self.val_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=False)
@@ -533,14 +536,14 @@ class Evaluation():
                 drop_last=False
             )
         
-        self.test_dataset = imagenet(
+        self.test_dataset = datasets(
             operation="test",
             datasets_folder_path=self.data_datasets_path,
             dataset_name=self.data_train_dataset,
-            transform=self.test_transform,
-            separate_val_subset=False,
-            val_size=0,
-            apply_data_augmentation=False,
+            separate_val_subset=self.data_separate_val_subset_use,
+            val_size=self.data_separate_val_subset_size,
+            transforms=[self.test_transform],
+            times=[1]
         )
 
         self.test_sampler = DistributedSampler(self.test_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=False)

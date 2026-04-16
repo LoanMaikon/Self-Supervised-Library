@@ -361,9 +361,9 @@ class ResNet(nn.Module):
         start_idx = 0
         for end_idx in idx_crops:
             if self.use_checkpoint:
-                _out = self.forward_checkpoint(torch.cat(inputs[start_idx: end_idx]).cuda(non_blocking=True))
+                _out = self.forward_checkpoint(torch.cat(inputs[start_idx: end_idx]).to(inputs[0].device))
             else:
-                _out = self.forward_normal(torch.cat(inputs[start_idx: end_idx]).cuda(non_blocking=True))
+                _out = self.forward_normal(torch.cat(inputs[start_idx: end_idx]).to(inputs[0].device))
             if start_idx == 0:
                 output = _out
             else:

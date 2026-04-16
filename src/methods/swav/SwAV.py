@@ -5,16 +5,13 @@ import torch.optim as optim
 import torch.nn as nn
 import numpy as np
 import torch
-import copy
-import json
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
-from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
-
+from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, resnet50w2, resnet50w4, resnet50w5, projection_head, prototypes
-from src.multicrop_imagenet import multicrop_imagenet
+from src.datasets import datasets
 from src.lars import LARS
 from src.methods.swav.sinkhorn import sinkhorn
 
@@ -71,7 +68,7 @@ class SwAV():
             self.train_loss.append(0.0)
             num_samples = 0
 
-            for iteration, (images) in enumerate(self.train_dataloader):
+            for iteration, (images, _) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
 
                 # Normalize prototypes
@@ -247,7 +244,7 @@ class SwAV():
                 raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
 
     def _load_dataloader(self):
-        train_dataset = multicrop_imagenet(
+        train_dataset = datasets(
             operation="train",
             datasets_folder_path=self.data_datasets_path,
             dataset_name=self.data_train_dataset,

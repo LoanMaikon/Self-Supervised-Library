@@ -9,7 +9,7 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, projection_head
-from src.imagenet import imagenet
+from src.datasets import datasets
 from src.nt_xent import nt_xent
 from src.lars import LARS
 
@@ -65,10 +65,10 @@ class SimCLR():
             self.train_loss.append(0.0)
             num_samples = 0
 
-            for iteration, (x1, x2) in enumerate(self.train_dataloader):
+            for iteration, (images, _) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
 
-                x1, x2 = x1.to(self.device, non_blocking=True), x2.to(self.device, non_blocking=True)
+                x1, x2 = images[0].to(self.device, non_blocking=True), images[1].to(self.device, non_blocking=True)
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     z1 = self.projection_head(self.encoder(x1))
@@ -201,14 +201,14 @@ class SimCLR():
                 raise ValueError(f"Unsupported criterion: {self.optimization_criterion}")
 
     def _load_dataloader(self):
-        self.train_dataset = imagenet(
+        self.train_dataset = datasets(
             operation="train",
             datasets_folder_path=self.data_datasets_path,
             dataset_name=self.data_train_dataset,
-            transform=self.transform,
             separate_val_subset=self.data_separate_val_subset_use,
             val_size=self.data_separate_val_subset_size,
-            apply_data_augmentation=True,
+            transforms=[self.transform],
+            times=[2]
         )
 
         self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)

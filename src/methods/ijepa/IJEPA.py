@@ -13,7 +13,7 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
 from .mask_collator import MaskCollator
-from src.imagenet import imagenet
+from src.datasets import datasets
 
 class IJEPA():
     def __init__(self,
@@ -68,19 +68,19 @@ class IJEPA():
             self.train_loss.append(0.0)
             num_samples = 0
 
-            for iteration, ((images, labels), masks_context, masks_pred) in enumerate(self.train_dataloader):
+            for iteration, ((images, _), masks_context, masks_pred) in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad()
 
-                imgs = images.to(self.device, non_blocking=True)
-                masks_context = [m.to(self.device, non_blocking=True) for m in masks_context]
-                masks_pred = [m.to(self.device, non_blocking=True) for m in masks_pred]
+                images = images[0].to(self.device, non_blocking=True)
+                masks_context = [m.to(self.device) for m in masks_context]
+                masks_pred = [m.to(self.device) for m in masks_pred]
 
                 with torch.amp.autocast("cuda", dtype=torch.float16):
-                    z = self.encoder(imgs, masks_context)
+                    z = self.encoder(images, masks_context)
                     z_pred = self.predictor(z, masks_context, masks_pred)
 
                     with torch.no_grad():
-                        z_target = self.target_encoder(imgs)
+                        z_target = self.target_encoder(images)
                         z_target = F.layer_norm(z_target, (z_target.size(-1),))
                         B = len(z_target)
                         z_target = apply_masks(z_target, masks_pred)
@@ -237,14 +237,14 @@ class IJEPA():
             pred_mask_scale=self.mask_target_mask_scale
         )
 
-        self.train_dataset = imagenet(
+        self.train_dataset = datasets(
             operation="train",
             datasets_folder_path=self.data_datasets_path,
             dataset_name=self.data_train_dataset,
-            transform=self.transform,
             separate_val_subset=self.data_separate_val_subset_use,
             val_size=self.data_separate_val_subset_size,
-            apply_data_augmentation=False,
+            transforms=[self.transform],
+            times=[1]
         )
 
         self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)

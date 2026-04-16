@@ -197,10 +197,15 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, mask_ratio=0.75):
+    def forward(self, imgs, mask_ratio=0, return_features=True):
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+
+        if return_features:
+            return latent[:, 0, :] # cls token
+
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
+
         return loss, pred, mask
 
     def load_weights(self, weight_path, device):
@@ -243,6 +248,15 @@ class MaskedAutoencoderViT(nn.Module):
     def unfreeze_all(self):
         for param in self.parameters():
             param.requires_grad = True
+    
+    def get_output_dim(self):
+        return self.cls_token.shape[-1]
+
+    def remove_classifier_head(self):
+        return
+
+    def get_features(self, features):
+        return features
 
 def mae_vit_tiny_patch16(image_size, use_checkpoint):
     return MaskedAutoencoderViT(

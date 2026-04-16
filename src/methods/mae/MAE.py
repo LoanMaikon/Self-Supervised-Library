@@ -66,7 +66,7 @@ class MAE():
                 self.optimizer.zero_grad()
 
                 with torch.amp.autocast("cuda", dtype=torch.float16):
-                    loss, _, _ = self.model(images.to(self.device), mask_ratio=self.mask_mask_ratio)
+                    loss, _, _ = self.model(images.to(self.device), mask_ratio=self.mask_mask_ratio, return_features=False)
 
                 scaler.scale(loss).backward()
                 scaler.step(self.optimizer)

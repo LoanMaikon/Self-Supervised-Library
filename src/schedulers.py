@@ -3,15 +3,7 @@ import math
 # Code from https://github.com/facebookresearch/ijepa/blob/main/src/utils/schedulers.py with some modifications
 
 class WarmupCosineSchedule(object):
-    def __init__(
-        self,
-        optimizer,
-        warmup_steps,
-        start_lr,
-        middle_lr,
-        final_lr,
-        T_max,
-    ):
+    def __init__(self, optimizer, warmup_steps, start_lr, middle_lr, final_lr, T_max):
         self.optimizer = optimizer
         self.start_lr = start_lr
         self.middle_lr = middle_lr
@@ -19,11 +11,21 @@ class WarmupCosineSchedule(object):
         self.warmup_steps = warmup_steps
         self.T_max = T_max - warmup_steps
 
-        self._step = 0.
+        self._step = 0
         self.actual_value = start_lr
 
     def get_value(self):
         return self.actual_value
+
+    def state_dict(self):
+        return {
+            "_step": self._step,
+            "actual_value": self.actual_value,
+        }
+
+    def load_state_dict(self, state_dict):
+        self._step = state_dict["_step"]
+        self.actual_value = state_dict["actual_value"]
 
     def step(self):
         self._step += 1
@@ -33,33 +35,38 @@ class WarmupCosineSchedule(object):
             new_lr = self.start_lr + progress * (self.middle_lr - self.start_lr)
         else:
             progress = float(self._step - self.warmup_steps) / float(max(1, self.T_max))
-            new_lr = max(self.final_lr, self.final_lr + (self.middle_lr - self.final_lr) * 0.5 * (1. + math.cos(math.pi * progress)))
+            new_lr = max(
+                self.final_lr,
+                self.final_lr + (self.middle_lr - self.final_lr) * 0.5 * (1. + math.cos(math.pi * progress))
+            )
 
         for group in self.optimizer.param_groups:
-            group['lr'] = new_lr
-        
-        self.actual_value = new_lr
+            group["lr"] = new_lr
 
+        self.actual_value = new_lr
         return new_lr
 
 class CosineWDSchedule(object):
-    def __init__(
-        self,
-        optimizer,
-        start_wd,
-        final_wd,
-        T_max,
-    ):
+    def __init__(self, optimizer, start_wd, final_wd, T_max):
         self.optimizer = optimizer
         self.start_wd = start_wd
         self.final_wd = final_wd
         self.T_max = T_max
-        self._step = 0.
-
+        self._step = 0
         self.actual_value = start_wd
 
     def get_value(self):
         return self.actual_value
+
+    def state_dict(self):
+        return {
+            "_step": self._step,
+            "actual_value": self.actual_value,
+        }
+
+    def load_state_dict(self, state_dict):
+        self._step = state_dict["_step"]
+        self.actual_value = state_dict["actual_value"]
 
     def step(self):
         self._step += 1
@@ -72,34 +79,36 @@ class CosineWDSchedule(object):
             new_wd = min(self.final_wd, new_wd)
 
         for group in self.optimizer.param_groups:
-            if ('WD_exclude' not in group) or not group['WD_exclude']:
-                group['weight_decay'] = new_wd
+            if ("WD_exclude" not in group) or not group["WD_exclude"]:
+                group["weight_decay"] = new_wd
 
         self.actual_value = new_wd
-
         return new_wd
 
 class EMACosineSchedule(object):
-    def __init__(
-        self,
-        start_ema,
-        final_ema,
-        T_max,
-    ):
+    def __init__(self, start_ema, final_ema, T_max):
         self.start_ema = start_ema
         self.final_ema = final_ema
         self.T_max = T_max
-        self._step = 0.
-
+        self._step = 0
         self.actual_value = start_ema
-    
+
     def get_value(self):
         return self.actual_value
+
+    def state_dict(self):
+        return {
+            "_step": self._step,
+            "actual_value": self.actual_value,
+        }
+
+    def load_state_dict(self, state_dict):
+        self._step = state_dict["_step"]
+        self.actual_value = state_dict["actual_value"]
 
     def step(self):
         self._step += 1
         progress = self._step / float(max(1, self.T_max))
-        
         new_ema = self.final_ema + (self.start_ema - self.final_ema) * 0.5 * (1. + math.cos(math.pi * progress))
 
         if self.final_ema >= self.start_ema:
@@ -108,7 +117,6 @@ class EMACosineSchedule(object):
             new_ema = max(self.final_ema, min(self.start_ema, new_ema))
 
         self.actual_value = new_ema
-
         return new_ema
 
 class LinearTemperatureSchedule(object):
@@ -127,6 +135,16 @@ class LinearTemperatureSchedule(object):
     
     def get_value(self):
         return self.actual_value
+
+    def state_dict(self):
+        return {
+            "_step": self._step,
+            "actual_value": self.actual_value,
+        }
+
+    def load_state_dict(self, state_dict):
+        self._step = state_dict["_step"]
+        self.actual_value = state_dict["actual_value"]
 
     def step(self):
         self._step += 1

@@ -39,8 +39,9 @@ class BYOL():
         self._load_optimizer()
         self._load_schedulers()
 
-        self.train_loss = []
+        self.scaler = torch.amp.GradScaler()
 
+        self.train_loss = []
         self.lr_values = []
         self.wd_values = []
         self.ema_values = []
@@ -51,6 +52,7 @@ class BYOL():
             self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"), map_location=self.device))
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"), map_location=self.device))
             self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"ema_scheduler_epoch.pth"), map_location=self.device))
+            self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
@@ -58,7 +60,6 @@ class BYOL():
 
     def train(self):
         write_on_log("Starting training...", self.output_folder)
-        scaler = torch.amp.GradScaler()
 
         for epoch in range(1, self.optimization_num_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
@@ -83,9 +84,9 @@ class BYOL():
 
                     loss = self.apply_criterion(z_online, z_target)
 
-                scaler.scale(loss).backward()
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
 
                 loss_value = loss.item()
                 self.train_loss[-1] += loss_value * x1.size(0)
@@ -130,22 +131,22 @@ class BYOL():
         prediction_head_state_dict = self.encoder_prediction_head.module.state_dict() if self.world_size > 1 else self.encoder_prediction_head.state_dict()
         target_encoder_state_dict = self.target_encoder.state_dict()
         target_projection_head_state_dict = self.target_encoder_projection_head.state_dict()
-
         optimizer_state_dict = self.optimizer.state_dict()
         lr_scheduler_state_dict = self.lr_scheduler.state_dict()
         wd_scheduler_state_dict = self.wd_scheduler.state_dict()
         ema_scheduler_state_dict = self.ema_scheduler.state_dict()
+        scaler_state_dict = self.scaler.state_dict()
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))
         torch.save(prediction_head_state_dict, os.path.join(self.output_folder, "models", "prediction_head.pth"))
         torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", "target_encoder.pth"))
         torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", "target_projection_head.pth"))
-
         torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch.pth"))
         torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"))
         torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"))
         torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_epoch.pth"))
+        torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
@@ -153,6 +154,11 @@ class BYOL():
             torch.save(prediction_head_state_dict, os.path.join(self.output_folder, "models", f"prediction_head_epoch_{epoch}.pth"))
             torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder_epoch_{epoch}.pth"))
             torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", f"target_projection_head_epoch_{epoch}.pth"))
+            torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch_{epoch}.pth"))
+            torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
+            torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
+            torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_epoch_{epoch}.pth"))
+            torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch_{epoch}.pth"))
     
     def update_target_network(self, ema):
         with torch.no_grad():

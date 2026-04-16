@@ -40,8 +40,9 @@ class IJEPA():
         self._load_optimizer()
         self._load_schedulers()
 
-        self.train_loss = []
+        self.scaler = torch.amp.GradScaler()
 
+        self.train_loss = []
         self.lr_values = []
         self.wd_values = []
         self.ema_values = []
@@ -52,6 +53,7 @@ class IJEPA():
             self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"), map_location=self.device))
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"), map_location=self.device))
             self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"ema_scheduler_epoch.pth"), map_location=self.device))
+            self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
@@ -59,7 +61,6 @@ class IJEPA():
 
     def train(self):
         write_on_log("Starting training...", self.output_folder)
-        scaler = torch.amp.GradScaler()
 
         for epoch in range(1, self.optimization_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
@@ -91,9 +92,9 @@ class IJEPA():
 
                     loss = self.apply_criterion(z_pred, z_target)
 
-                scaler.scale(loss).backward()
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
 
                 loss_value = loss.item()
                 self.train_loss[-1] += loss_value * images.size(0)
@@ -136,11 +137,11 @@ class IJEPA():
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
         predictor_state_dict = self.predictor.module.state_dict() if self.world_size > 1 else self.predictor.state_dict()
         target_encoder_state_dict = self.target_encoder.state_dict()
-
         optimizer_state_dict = self.optimizer.state_dict()
         lr_scheduler_state_dict = self.lr_scheduler.state_dict()
         wd_scheduler_state_dict = self.wd_scheduler.state_dict()
         ema_scheduler_state_dict = self.ema_scheduler.state_dict()
+        scaler_state_dict = self.scaler.state_dict()
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(predictor_state_dict, os.path.join(self.output_folder, "models", "predictor.pth"))
@@ -149,6 +150,7 @@ class IJEPA():
         torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"))
         torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"))
         torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_epoch.pth"))
+        torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", "scaler.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
@@ -158,6 +160,7 @@ class IJEPA():
             torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
             torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
             torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_epoch_{epoch}.pth"))
+            torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch_{epoch}.pth"))
     
     def update_target_network(self, ema):
         with torch.no_grad():

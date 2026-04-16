@@ -110,3 +110,31 @@ class EMACosineSchedule(object):
         self.actual_value = new_ema
 
         return new_ema
+
+class LinearTemperatureSchedule(object):
+    def __init__(
+        self,
+        start_temp,
+        final_temp,
+        T_max,
+    ):
+        self.start_temp = start_temp
+        self.final_temp = final_temp
+        self.T_max = T_max
+        self._step = 0.
+
+        self.actual_value = start_temp
+    
+    def get_value(self):
+        return self.actual_value
+
+    def step(self):
+        self._step += 1
+        progress = self._step / float(max(1, self.T_max))
+        
+        new_temp = self.start_temp + progress * (self.final_temp - self.start_temp)
+        new_temp = max(min(new_temp, max(self.start_temp, self.final_temp)), min(self.start_temp, self.final_temp))
+
+        self.actual_value = new_temp
+
+        return new_temp

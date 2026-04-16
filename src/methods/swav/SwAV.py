@@ -7,13 +7,13 @@ import numpy as np
 import torch
 import os
 
-from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
+from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
     recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, resnet50w2, resnet50w4, resnet50w5, projection_head, prototypes
 from src.datasets import datasets
 from src.lars import LARS
-from src.methods.swav.sinkhorn import sinkhorn
+from src.sinkhorn import sinkhorn
 
 class SwAV():
     def __init__(self,

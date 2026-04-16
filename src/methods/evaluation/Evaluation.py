@@ -621,10 +621,12 @@ class Evaluation():
                     {
                         "params": decay_params,
                         "weight_decay": self.optimization_weight_decay[0],
+                        "WD_exclude": False
                     },
                     {
                         "params": no_decay_params,
                         "weight_decay": 0.0,
+                        "WD_exclude": True
                     },
                 ]
 

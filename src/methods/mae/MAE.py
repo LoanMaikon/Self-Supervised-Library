@@ -150,7 +150,7 @@ class MAE():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
-                target_modules = [self.encoder, self.predictor] if self.world_size == 1 else [self.encoder.module, self.predictor.module]
+                target_modules = [self.model] if self.world_size == 1 else [self.model.module]
 
                 decay_params = []
                 no_decay_params = []
@@ -265,8 +265,8 @@ class MAE():
         self.data_prefetch_factor = int(self.config['data']['prefetch_factor'])
         self.data_pin_memory = bool(self.config['data']['pin_memory'])
         self.data_drop_last = bool(self.config['data']['drop_last'])
-        self.data_normalize_mean = map(float, self.config['data']['normalize']['mean'])
-        self.data_normalize_std = map(float, self.config['data']['normalize']['std'])
+        self.data_normalize_mean = list(map(float, self.config["data"]["normalize"]["mean"]))
+        self.data_normalize_std = list(map(float, self.config["data"]["normalize"]["std"]))
         self.data_random_resized_crop_use = bool(self.config['data']['random_resized_crop']['use'])
         self.data_random_resized_crop_scale = list(map(float, self.config['data']['random_resized_crop']['scale']))
         self.data_random_resized_crop_ratio = list(map(float, self.config['data']['random_resized_crop']['ratio']))

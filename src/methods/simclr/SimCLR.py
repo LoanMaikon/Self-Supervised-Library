@@ -148,37 +148,10 @@ class SimCLR():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "lars":
-                param_groups = [
-                    {
-                        'params': (p for n, p in self.encoder.named_parameters()
-                                if ('bias' not in n) and (len(p.shape) != 1)),
-                        'layer_adaptation': True,
-                        'weight_decay': self.optimization_weight_decay[0],
-                    }, 
-                    {
-                        'params': (p for n, p in self.projection_head.named_parameters()
-                                if ('bias' not in n) and (len(p.shape) != 1)),
-                        'layer_adaptation': True,
-                        'weight_decay': self.optimization_weight_decay[0],
-                    },
-                    {
-                        'params': (p for n, p in self.encoder.named_parameters()
-                                if ('bias' in n) or (len(p.shape) == 1)),
-                        'WD_exclude': True,
-                        'weight_decay': 0,
-                    },
-                    {
-                        'params': (p for n, p in self.projection_head.named_parameters()
-                                if ('bias' in n) or (len(p.shape) == 1)),
-                        'WD_exclude': True,
-                        'weight_decay': 0,
-                    }
-                ]
-                
-                self.base_optimizer = optim.SGD(param_groups, lr=self.optimization_lr[0], momentum=0.9)
                 self.optimizer = LARS(
-                    self.base_optimizer,
-                    trust_coefficient=0.001
+                    list(self.encoder.parameters()) + list(self.projection_head.parameters()),
+                    lr=self.optimization_lr[0],
+                    weight_decay=self.optimization_weight_decay[0],
                 )
             
             case _:

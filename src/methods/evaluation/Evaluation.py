@@ -580,55 +580,41 @@ class Evaluation():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "sgd":
+                decay_params = []
+                no_decay_params = []
+
                 if self.meta_mode == "linear_eval":
-                    param_groups = [
-                        {
-                            'params': (p for n, p in self.linear_head.named_parameters()
-                                    if ('bias' not in n) and (len(p.shape) != 1)),
-                            'layer_adaptation': True,
-                            'weight_decay': self.optimization_weight_decay[0],
-                        },
-                        {
-                            'params': (p for n, p in self.linear_head.named_parameters()
-                                    if ('bias' in n) or (len(p.shape) == 1)),
-                            'WD_exclude': True,
-                            'weight_decay': 0,
-                        },
-                    ]
+                    modules = [self.linear_head]
                 else:
-                    param_groups = [
-                        {
-                            'params': (p for n, p in self.encoder.named_parameters()
-                                    if ('bias' not in n) and (len(p.shape) != 1)),
-                            'layer_adaptation': True,
-                            'weight_decay': self.optimization_weight_decay[0],
-                        },
-                        {
-                            'params': (p for n, p in self.linear_head.named_parameters()
-                                    if ('bias' not in n) and (len(p.shape) != 1)),
-                            'layer_adaptation': True,
-                            'weight_decay': self.optimization_weight_decay[0],
-                        },
-                        {
-                            'params': (p for n, p in self.encoder.named_parameters()
-                                    if ('bias' in n) or (len(p.shape) == 1)),
-                            'WD_exclude': True,
-                            'weight_decay': 0,
-                        },
-                        {
-                            'params': (p for n, p in self.linear_head.named_parameters()
-                                    if ('bias' in n) or (len(p.shape) == 1)),
-                            'WD_exclude': True,
-                            'weight_decay': 0,
-                        },
-                    ]
+                    modules = [self.encoder, self.linear_head]
+
+                for module in modules:
+                    for name, p in module.named_parameters():
+                        if not p.requires_grad:
+                            continue
+
+                        if p.ndim > 1:
+                            decay_params.append(p)
+                        else:
+                            no_decay_params.append(p)
+
+                param_groups = [
+                    {
+                        "params": decay_params,
+                        "weight_decay": self.optimization_weight_decay[0],
+                    },
+                    {
+                        "params": no_decay_params,
+                        "weight_decay": 0.0,
+                    },
+                ]
 
                 self.optimizer = optim.SGD(
                     param_groups,
                     lr=self.optimization_lr[0],
                     momentum=0.9,
                 )
-            
+
             case _:
                 raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
 

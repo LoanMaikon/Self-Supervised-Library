@@ -135,21 +135,34 @@ class MAE():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
+                decay_params = []
+                no_decay_params = []
+
+                for module in [self.encoder, self.predictor]:
+                    for name, p in module.named_parameters():
+                        if not p.requires_grad:
+                            continue
+
+                        if p.ndim > 1 and "bias" not in name:
+                            decay_params.append(p)
+                        else:
+                            no_decay_params.append(p)
+
                 param_groups = [
                     {
-                        'params': (p for n, p in self.model.named_parameters()
-                                if ('bias' not in n) and (len(p.shape) != 1)),
-                        'weight_decay': self.optimization_weight_decay[0],
-                    }, 
+                        "params": decay_params,
+                        "weight_decay": self.optimization_weight_decay[0],
+                    },
                     {
-                        'params': (p for n, p in self.model.named_parameters()
-                                if ('bias' in n) or (len(p.shape) == 1)),
-                        'WD_exclude': True,
-                        'weight_decay': 0,
+                        "params": no_decay_params,
+                        "weight_decay": 0.0,
                     },
                 ]
 
-                self.optimizer = optim.AdamW(param_groups, lr=self.optimization_lr[0])
+                self.optimizer = optim.AdamW(
+                    param_groups,
+                    lr=self.optimization_lr[0],
+                )
 
             case _:
                 raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")

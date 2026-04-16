@@ -5,7 +5,7 @@ data:
   train_dataset: imagenet
   batch_size: 512 # For each device, so the effective batch size is batch_size * num_devices
   crop_size: 224
-  num_workers: 32 # For each device, so the effective number of workers is num_workers * num_devices
+  num_workers: 64 # For each device, so the effective number of workers is num_workers * num_devices
   prefetch_factor: 1
   pin_memory: false
   drop_last: true

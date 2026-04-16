@@ -584,9 +584,9 @@ class Evaluation():
                 no_decay_params = []
 
                 if self.meta_mode == "linear_eval":
-                    modules = [self.linear_head]
+                    modules = [self.linear_head] if self.world_size == 1 else [self.linear_head.module]
                 else:
-                    modules = [self.encoder, self.linear_head]
+                    modules = [self.encoder, self.linear_head] if self.world_size == 1 else [self.encoder.module, self.linear_head.module]
 
                 for module in modules:
                     for name, p in module.named_parameters():

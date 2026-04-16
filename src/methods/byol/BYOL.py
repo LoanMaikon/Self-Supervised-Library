@@ -176,7 +176,7 @@ class BYOL():
         match self.optimization_optimizer:
             case "lars":
                 self.optimizer = LARS(
-                    list(self.encoder.parameters()) + list(self.projection_head.parameters()) + list(self.prediction_head.parameters()),
+                    list(self.encoder.parameters()) + list(self.projection_head.parameters()) + list(self.prediction_head.parameters()) if self.world_size == 1 else list(self.encoder.module.parameters()) + list(self.projection_head.module.parameters()) + list(self.prediction_head.module.parameters()),
                     lr=self.optimization_lr[0],
                     weight_decay=self.optimization_weight_decay[0],
                 )

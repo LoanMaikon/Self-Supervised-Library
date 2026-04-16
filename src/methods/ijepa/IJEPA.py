@@ -174,10 +174,12 @@ class IJEPA():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
+                target_modules = [self.encoder, self.predictor] if self.world_size == 1 else [self.encoder.module, self.predictor.module]
+
                 decay_params = []
                 no_decay_params = []
 
-                for module in [self.encoder, self.predictor]:
+                for module in target_modules:
                     for name, p in module.named_parameters():
                         if not p.requires_grad:
                             continue

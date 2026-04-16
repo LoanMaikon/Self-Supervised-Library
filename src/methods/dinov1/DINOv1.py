@@ -9,7 +9,7 @@ import copy
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearTemperatureSchedule
 from src.datasets import datasets
@@ -47,7 +47,10 @@ class DINOv1():
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
-            step_schedulers_to_epoch(self.last_epoch, len(self.train_dataloader), self.lr_scheduler, self.wd_scheduler, self.ema_scheduler)
+            self.optimizer.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"optimizer_epoch.pth"), map_location=self.device))
+            self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"), map_location=self.device))
+            self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"), map_location=self.device))
+            self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"ema_scheduler_epoch.pth"), map_location=self.device)) 
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 

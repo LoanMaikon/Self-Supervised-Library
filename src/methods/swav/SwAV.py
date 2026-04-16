@@ -8,7 +8,7 @@ import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, resnet50w2, resnet50w4, resnet50w5, projection_head, prototypes
 from src.datasets import datasets
@@ -47,7 +47,9 @@ class SwAV():
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
-            step_schedulers_to_epoch(self.last_epoch, len(self.train_dataloader), self.lr_scheduler, self.wd_scheduler)
+            self.optimizer.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "optimizer.pth"), map_location=self.device))
+            self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "lr_scheduler.pth"), map_location=self.device))
+            self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "wd_scheduler.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
             self.load_queue_from_last_epoch()
@@ -151,16 +153,26 @@ class SwAV():
         projection_head_state_dict = self.projection_head.module.state_dict() if self.world_size > 1 else self.projection_head.state_dict()
         prototypes_state_dict = self.prototypes.module.state_dict() if self.world_size > 1 else self.prototypes.state_dict()
 
+        optimizer_state_dict = self.optimizer.state_dict()
+        lr_scheduler_state_dict = self.lr_scheduler.state_dict()
+        wd_scheduler_state_dict = self.wd_scheduler.state_dict()
+
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))
         torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", "prototypes.pth"))
         torch.save(self.queue, os.path.join(self.output_folder, "queue", "queue.pth"))
+        torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", "optimizer.pth"))
+        torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", "lr_scheduler.pth"))
+        torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", "wd_scheduler.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
             torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head_epoch_{epoch}.pth"))
             torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", f"prototypes_epoch_{epoch}.pth"))
             torch.save(self.queue, os.path.join(self.output_folder, "queue", f"queue_epoch_{epoch}.pth"))
+            torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch_{epoch}.pth"))
+            torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
+            torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
 
     def _load_queue(self):
         self.queue = torch.zeros(self.data_global_views_num, self.optimization_queue_length, self.meta_projection_dim).to(self.device)

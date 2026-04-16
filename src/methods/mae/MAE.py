@@ -6,7 +6,7 @@ import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from src.datasets import datasets
 from .models import mae_vit_tiny_patch16, mae_vit_small_patch16, mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge_patch14
@@ -42,7 +42,9 @@ class MAE():
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
-            step_schedulers_to_epoch(self.last_epoch, len(self.train_dataloader), self.lr_scheduler, self.wd_scheduler)
+            self.optimizer.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"optimizer_epoch.pth"), map_location=self.device))
+            self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"), map_location=self.device))
+            self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"), map_location=self.device)) 
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
@@ -109,11 +111,20 @@ class MAE():
         os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
 
         model_state_dict = self.model.module.state_dict() if self.world_size > 1 else self.model.state_dict()
+        optimizer_state_dict = self.optimizer.state_dict()
+        lr_scheduler_state_dict = self.lr_scheduler.state_dict()
+        wd_scheduler_state_dict = self.wd_scheduler.state_dict()
 
         torch.save(model_state_dict, os.path.join(self.output_folder, "models", "model.pth"))
+        torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch.pth"))
+        torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"))
+        torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(model_state_dict, os.path.join(self.output_folder, "models", f"model_epoch_{epoch}.pth"))
+            torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch_{epoch}.pth"))
+            torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
+            torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
 
     def _load_schedulers(self):
         self.lr_scheduler = WarmupCosineSchedule(

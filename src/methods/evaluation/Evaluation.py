@@ -16,7 +16,7 @@ from src.methods.mae.models import mae_vit_base_patch16, mae_vit_large_patch16, 
 from .resnet50 import resnet50 as resnet50_eval
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, step_schedulers_to_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .linear_head import LinearHead
 from src.datasets import datasets
@@ -58,7 +58,9 @@ class Evaluation():
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
-            step_schedulers_to_epoch(self.last_epoch, len(self.train_dataloader), self.lr_scheduler, self.wd_scheduler)
+            self.optimizer.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"optimizer_epoch.pth"), map_location=self.device))
+            self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"), map_location=self.device))
+            self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
@@ -232,12 +234,26 @@ class Evaluation():
     
         os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
 
-        torch.save(self.encoder.module.state_dict() if self.world_size > 1 and self.meta_mode == "fine_tuning" else self.encoder.state_dict(), os.path.join(self.output_folder, "models", "encoder.pth"))
-        torch.save(self.linear_head.module.state_dict() if self.world_size > 1 else self.linear_head.state_dict(), os.path.join(self.output_folder, "models", "linear_head.pth"))
+        encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 and self.meta_mode == "fine_tuning" else self.encoder.state_dict()
+        linear_head_state_dict = self.linear_head.module.state_dict() if self.world_size > 1 else self.linear_head.state_dict()
+
+        optimizer_state_dict = self.optimizer.state_dict()
+        lr_scheduler_state_dict = self.lr_scheduler.state_dict()
+        wd_scheduler_state_dict = self.wd_scheduler.state_dict()
+
+        torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
+        torch.save(linear_head_state_dict, os.path.join(self.output_folder, "models", "linear_head.pth"))
+        torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", "optimizer.pth"))
+        torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", "lr_scheduler.pth"))
+        torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", "wd_scheduler.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
-            torch.save(self.encoder.module.state_dict() if self.world_size > 1 and self.meta_mode == "fine_tuning" else self.encoder.state_dict(), os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
-            torch.save(self.linear_head.module.state_dict() if self.world_size > 1 else self.linear_head.state_dict(), os.path.join(self.output_folder, "models", f"linear_head_epoch_{epoch}.pth"))
+            torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
+            torch.save(linear_head_state_dict, os.path.join(self.output_folder, "models", f"linear_head_epoch_{epoch}.pth"))
+            torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch_{epoch}.pth"))
+            torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
+            torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
+            
 
     def _load_models(self):
         def __try_load_models():

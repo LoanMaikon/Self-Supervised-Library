@@ -80,18 +80,6 @@ def get_last_epoch(output_folder):
     
     return last_epoch_data.get("last_epoch", 0)
 
-def step_schedulers_to_epoch(epoch, steps_per_epoch, lr_scheduler, wd_scheduler, ema_scheduler=None):
-    if epoch == 0:
-        return
-
-    total_steps = epoch * steps_per_epoch
-
-    for _ in range(total_steps):
-        lr_scheduler.step()
-        wd_scheduler.step()
-        if ema_scheduler is not None:
-            ema_scheduler.step()
-
 def load_last_values(output_folder, last_epoch):
     lr_values = []
     wd_values = []

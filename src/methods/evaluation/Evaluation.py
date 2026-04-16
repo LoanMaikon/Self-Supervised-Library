@@ -238,6 +238,8 @@ class Evaluation():
 
     def _load_models(self):
         def __try_load_models():
+            errors = []
+
             if self.evaluate_weights == "supervised_resnet50":
                 self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=True)
                 self.model_type = "supervised_resnet50"
@@ -246,8 +248,6 @@ class Evaluation():
                 self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=False)
                 self.model_type = "random_resnet50"
                 return
-
-            errors = []
 
             try:
                 self.encoder = simclr_resnet50(self.meta_checkpoint)
@@ -422,6 +422,7 @@ class Evaluation():
             )
 
         __try_load_models()
+
         if "mae" in self.model_type:
             self.linear_head = LinearHead(self.encoder.get_output_dim(), 1000, batch_norm=True).to(self.device)
         else:

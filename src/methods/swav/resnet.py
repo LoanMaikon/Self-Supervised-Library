@@ -286,7 +286,7 @@ class ResNet(nn.Module):
         try:
             self.remove_unnecessary_modules()
             self.remove_projection_head()
-            self.load_state_dict(clean_state_dict, strict=False)
+            self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
             errors.append(("remove_unnecessary_modules", str(e)))
@@ -307,7 +307,10 @@ class ResNet(nn.Module):
     def remove_projection_head(self):
         self.projection_head = None
     
-    def get_out_dim(self):
+    def remove_classifier_head(self):
+        return
+    
+    def get_output_dim(self):
         return self.encoder_out_features
 
     def forward_normal(self, x):

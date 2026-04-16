@@ -24,7 +24,7 @@ class MaskedAutoencoderViT(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
         self.blocks = nn.ModuleList([
-            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
+            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
             for i in range(depth)])
         self.norm = norm_layer(embed_dim)
 
@@ -36,7 +36,7 @@ class MaskedAutoencoderViT(nn.Module):
         self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, decoder_embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
         self.decoder_blocks = nn.ModuleList([
-            Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
+            Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
             for i in range(decoder_depth)])
 
         self.decoder_norm = norm_layer(decoder_embed_dim)
@@ -211,7 +211,12 @@ class MaskedAutoencoderViT(nn.Module):
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)
 
-        state_dict = checkpoint.get("state_dict", checkpoint)
+        if "state_dict" in checkpoint:
+            state_dict = checkpoint["state_dict"]
+        elif "model" in checkpoint:
+            state_dict = checkpoint["model"]
+        else:
+            state_dict = checkpoint
 
         clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 
@@ -221,11 +226,32 @@ class MaskedAutoencoderViT(nn.Module):
             return
         except Exception as e:
             errors.append(("mae", str(e)))
+
+        try:
+            self.remove_decoder()
+            self.load_state_dict(clean_state_dict)
+            return
+        except Exception as e:
+            errors.append(("mae_no_decoder", str(e)))
         
         raise ValueError(
             f"Failed to load weights from {weight_path}. "
             f"Tried: {clean_state_dict.keys()}"
         )
+
+    def remove_decoder(self):
+        del self.decoder_embed
+        del self.mask_token
+        del self.decoder_pos_embed
+        del self.decoder_blocks
+        del self.decoder_norm
+        del self.decoder_pred
+        self.decoder_embed = None
+        self.mask_token = None
+        self.decoder_pos_embed = None
+        self.decoder_blocks = None
+        self.decoder_norm = None
+        self.decoder_pred = None
     
     def freeze(self):
         for param in self.parameters():

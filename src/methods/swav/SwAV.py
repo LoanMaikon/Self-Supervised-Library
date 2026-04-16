@@ -314,7 +314,7 @@ class SwAV():
             case _:
                 raise ValueError(f"Unsupported model name: {self.meta_model_name}")
         
-        self.projection_head = projection_head(self.encoder.get_out_dim(), self.encoder.get_out_dim(), self.meta_projection_dim)
+        self.projection_head = projection_head(self.encoder.get_output_dim(), self.encoder.get_output_dim(), self.meta_projection_dim)
         self.prototypes = prototypes(self.meta_projection_dim, self.optimization_num_prototypes)
 
         self.encoder.remove_unnecessary_modules()

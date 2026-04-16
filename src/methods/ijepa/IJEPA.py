@@ -49,10 +49,10 @@ class IJEPA():
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
-            self.optimizer.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"optimizer_epoch.pth"), map_location=self.device))
-            self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"), map_location=self.device))
-            self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"), map_location=self.device))
-            self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"ema_scheduler_epoch.pth"), map_location=self.device))
+            self.optimizer.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"optimizer.pth"), map_location=self.device))
+            self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler.pth"), map_location=self.device))
+            self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler.pth"), map_location=self.device))
+            self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"ema_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
@@ -146,10 +146,10 @@ class IJEPA():
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(predictor_state_dict, os.path.join(self.output_folder, "models", "predictor.pth"))
         torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", "target_encoder.pth"))
-        torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch.pth"))
-        torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch.pth"))
-        torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch.pth"))
-        torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_epoch.pth"))
+        torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer.pth"))
+        torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler.pth"))
+        torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler.pth"))
+        torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler.pth"))
         torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", "scaler.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:

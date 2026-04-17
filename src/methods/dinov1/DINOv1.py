@@ -3,8 +3,6 @@ from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
 import torch.nn.functional as F
 import torch.optim as optim
-import torch.nn as nn
-from PIL import ImageOps
 import torch
 import copy
 import os
@@ -12,8 +10,8 @@ import os
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
     recreate_csv_log, get_last_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
-    LinearTemperatureSchedule
-from models import vit_base, vit_small, vit_tiny, projection_head
+    LinearWarmupTemperatureSchedule
+from .models import vit_base, vit_small, vit_tiny, projection_head
 from src.datasets import datasets
 
 class DINOv1():
@@ -37,9 +35,9 @@ class DINOv1():
         self._load_models()
         self._load_transform()
         self._load_dataloader()
-        self._load_criterion()
         self._load_optimizer()
         self._load_schedulers()
+        self._load_center()
 
         self.scaler = torch.amp.GradScaler()
 
@@ -55,13 +53,92 @@ class DINOv1():
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler.pth"), map_location=self.device))
             self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"ema_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
+            self.student_temp_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "student_temp_scheduler.pth"), map_location=self.device))
+            self.teacher_temp_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "teacher_temp_scheduler.pth"), map_location=self.device))
+            self.center = torch.load(os.path.join(self.output_folder, "models", "center.pth"), map_location=self.device)
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
     def train(self):
-        pass
+        write_on_log("Starting training...", self.output_folder)
+
+        for epoch in range(1, self.optimization_epochs + 1):
+            if self.continue_training and epoch <= self.last_epoch:
+                continue
+
+            write_on_log(f"Epoch {epoch}/{self.optimization_epochs}", self.output_folder)
+            self.train_sampler.set_epoch(epoch)
+
+            self.train_loss.append(0.0)
+            num_samples = 0
+
+            for iteration, (images, _) in enumerate(self.train_dataloader):
+                self.optimizer.zero_grad()
+
+                images = [img.to(self.device, non_blocking=True) for img in images]
+
+                with torch.amp.autocast(device_type=self.device.type):
+                    target_outputs = self.target_encoder(torch.cat(images[:2], dim=0))
+                    target_outputs = self.target_projection_head(target_outputs)
+
+                    student_outputs = self.encoder(torch.cat(images, dim=0))
+                    student_outputs = self.projection_head(student_outputs) / self.student_temp_scheduler.get_value()
+
+                    student_out = student_outputs.chunk(len(images), dim=0)
+                    teacher_out = F.softmax((target_outputs - self.center) / self.teacher_temp_scheduler.get_value(), dim=-1).detach().chunk(2, dim=0)
+
+                    total_loss = 0.0
+                    n_loss_terms = 0.0
+                    for iq, q in enumerate(teacher_out):
+                        for v in range(len(student_out)):
+                            if v == iq:
+                                continue
+
+                            loss = torch.sum(-q * F.log_softmax(student_out[v], dim=-1), dim=-1).mean()
+                            total_loss += loss
+                            n_loss_terms += 1
+                    total_loss /= n_loss_terms
+
+                    self.update_center(target_outputs)
+
+                    loss_value = total_loss.item()
+                    self.train_loss[-1] += loss_value * images[0].size(0)
+                    num_samples += images[0].size(0)
+
+                self.scaler.scale(total_loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+
+                self.lr_values.append(self.lr_scheduler.get_value())
+                self.wd_values.append(self.wd_scheduler.get_value())
+                self.ema_values.append(self.ema_scheduler.get_value())
+                write_on_csv(self.output_folder, epoch, iteration, loss_value, self.lr_values[-1], self.wd_values[-1], self.ema_values[-1])
+
+                self.update_target_network(self.ema_scheduler.get_value())
+
+                self.lr_scheduler.step()
+                self.wd_scheduler.step()
+                self.ema_scheduler.step()
+                self.student_temp_scheduler.step()
+                self.teacher_temp_scheduler.step()
+            
+            self.train_loss[-1] /= num_samples
+
+            self.save_models(epoch)
+
+            write_on_log(f"Loss: {self.train_loss[-1]}", self.output_folder)
+
+            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
+            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
+            plot_fig(range(len(self.ema_values)), "Iteration", self.ema_values, "EMA", f"ema", self.output_folder)
+            
+            save_json({"train_loss": self.train_loss}, self.output_folder, "training_info")
+            save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
+
+            write_on_log("", self.output_folder)          
 
     def save_models(self, epoch):
         if not is_main_process():
@@ -78,6 +155,8 @@ class DINOv1():
         wd_scheduler_state_dict = self.wd_scheduler.state_dict()
         ema_scheduler_state_dict = self.ema_scheduler.state_dict()
         scaler_state_dict = self.scaler.state_dict()
+        student_temp_scheduler_state_dict = self.student_temp_scheduler.state_dict()
+        teacher_temp_scheduler_state_dict = self.teacher_temp_scheduler.state_dict()
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder.pth"))
         torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head.pth"))
@@ -88,6 +167,9 @@ class DINOv1():
         torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler.pth"))
         torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler.pth"))
         torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler.pth"))
+        torch.save(student_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"student_temp_scheduler.pth"))
+        torch.save(teacher_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"teacher_temp_scheduler.pth"))
+        torch.save(self.center, os.path.join(self.output_folder, "models", f"center.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
@@ -99,6 +181,23 @@ class DINOv1():
             torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
             torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_epoch_{epoch}.pth"))
             torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch_{epoch}.pth"))
+            torch.save(student_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"student_temp_scheduler_epoch_{epoch}.pth"))
+            torch.save(teacher_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"teacher_temp_scheduler_epoch_{epoch}.pth"))
+            torch.save(self.center, os.path.join(self.output_folder, "models", f"center_epoch_{epoch}.pth"))
+
+    def update_center(self, target_outputs):
+        with torch.no_grad():
+            batch_center = torch.sum(target_outputs, dim=0, keepdim=True)
+
+            if self.world_size > 1:
+                torch.distributed.all_reduce(batch_center, op=torch.distributed.ReduceOp.SUM)
+            
+            batch_center /= len(target_outputs) * self.world_size
+            
+            self.center = self.center * self.optimization_center_momentum + batch_center * (1 - self.optimization_center_momentum)
+
+    def _load_center(self):
+        self.center = torch.zeros(1, self.meta_projection_head_output_dim).to(self.device)
 
     def update_target_network(self, ema):
         with torch.no_grad():
@@ -128,6 +227,22 @@ class DINOv1():
         self.ema_scheduler = EMACosineSchedule(
             start_ema=self.optimization_ema[0],
             final_ema=self.optimization_ema[1],
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
+
+        self.student_temp_scheduler = LinearWarmupTemperatureSchedule(
+            start_temp=self.optimization_temperature_student[0],
+            middle_temp=self.optimization_temperature_student[1],
+            final_temp=self.optimization_temperature_student[2],
+            warmup_steps=self.optimization_tempereature_warmup * len(self.train_dataloader),
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
+
+        self.teacher_temp_scheduler = LinearWarmupTemperatureSchedule(
+            start_temp=self.optimization_temperature_teacher[0],
+            middle_temp=self.optimization_temperature_teacher[1],
+            final_temp=self.optimization_temperature_teacher[2],
+            warmup_steps=self.optimization_tempereature_warmup * len(self.train_dataloader),
             T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
 
@@ -207,6 +322,7 @@ class DINOv1():
             v2.RandomResizedCrop(size=self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
             flip_and_color_jitter,
             v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1, sigma=(0.1, 2.0)),
+            v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=tuple(self.data_normalize_mean), std=tuple(self.data_normalize_std)),
         ])
 
@@ -214,7 +330,8 @@ class DINOv1():
             v2.RandomResizedCrop(size=self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
             flip_and_color_jitter,
             v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.1),
-            v2.RandomApply([ImageOps.solarize], p=0.2),
+            v2.RandomSolarize(p=0.2),
+            v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=tuple(self.data_normalize_mean), std=tuple(self.data_normalize_std)),
         ])
 
@@ -222,7 +339,7 @@ class DINOv1():
             v2.RandomResizedCrop(size=self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio)),
             flip_and_color_jitter,
             v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_local_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.5),
-            v2.RandomApply([ImageOps.solarize], p=0.5),
+            v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=tuple(self.data_normalize_mean), std=tuple(self.data_normalize_std)),
         ])
 
@@ -256,9 +373,9 @@ class DINOv1():
                 raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
         
         self.target_encoder = copy.deepcopy(self.encoder)
-        self.target_encoder.checkpoint = False # Target model should not use checkpointing
+        self.target_encoder.use_checkpoint = False # Target model should not use checkpointing
         self.target_projection_head = copy.deepcopy(self.projection_head)
-        self.target_projection_head.checkpoint = False # Target projection head should not use checkpointing
+        self.target_projection_head.use_checkpoint = False # Target projection head should not use checkpointing
 
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
@@ -298,8 +415,8 @@ class DINOv1():
         self.data_prefetch_factor = int(self.config["data"]["prefetch_factor"])
         self.data_pin_memory = bool(self.config["data"]["pin_memory"])
         self.data_drop_last = bool(self.config["data"]["drop_last"])
-        self.data_normalize_mean = map(float, self.config["data"]["normalize"]["mean"])
-        self.data_normalize_std = map(float, self.config["data"]["normalize"]["std"])
+        self.data_normalize_mean = list(map(float, self.config["data"]["normalize"]["mean"]))
+        self.data_normalize_std = list(map(float, self.config["data"]["normalize"]["std"]))
         self.data_separate_val_subset_use = bool(self.config["data"]["separate_val_subset"]["use"])
         self.data_separate_val_subset_size = float(self.config["data"]["separate_val_subset"]["size"])
         self.data_global_views_num = int(self.config["data"]["global_views"]["num"])
@@ -335,5 +452,6 @@ class DINOv1():
         self.optimization_temperature_student = list(map(float, self.config["optimization"]["temperature_student"]))
         self.optimization_temperature_teacher = list(map(float, self.config["optimization"]["temperature_teacher"]))
         self.optimization_tempereature_warmup = int(self.config["optimization"]["tempereature_warmup"])
+        self.optimization_center_momentum = float(self.config["optimization"]["center_momentum"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

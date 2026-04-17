@@ -446,9 +446,9 @@ class Evaluation():
         __try_load_models()
 
         if "mae" in self.model_type:
-            self.linear_head = LinearHead(self.encoder.get_output_dim(), 1000, batch_norm=True).to(self.device)
+            self.linear_head = LinearHead(self.encoder.get_output_dim(), self.train_dataset.get_num_classes(), batch_norm=True).to(self.device)
         else:
-            self.linear_head = LinearHead(self.encoder.get_output_dim(), 1000).to(self.device)
+            self.linear_head = LinearHead(self.encoder.get_output_dim(), self.train_dataset.get_num_classes()).to(self.device)
         self.linear_head.unfreeze()
         
         match self.meta_mode:

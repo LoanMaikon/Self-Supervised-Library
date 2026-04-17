@@ -119,40 +119,46 @@ class EMACosineSchedule(object):
         self.actual_value = new_ema
         return new_ema
 
-class LinearTemperatureSchedule(object):
+class LinearWarmupTemperatureSchedule(object):
     def __init__(
         self,
         start_temp,
+        middle_temp,
         final_temp,
+        warmup_steps,
         T_max,
     ):
         self.start_temp = start_temp
+        self.middle_temp = middle_temp
         self.final_temp = final_temp
+        self.warmup_steps = warmup_steps
         self.T_max = T_max
-        self._step = 0.
-
+        self._step = 0
         self.actual_value = start_temp
     
     def get_value(self):
         return self.actual_value
-
+    
     def state_dict(self):
         return {
             "_step": self._step,
             "actual_value": self.actual_value,
         }
-
+    
     def load_state_dict(self, state_dict):
         self._step = state_dict["_step"]
         self.actual_value = state_dict["actual_value"]
 
     def step(self):
         self._step += 1
-        progress = self._step / float(max(1, self.T_max))
-        
-        new_temp = self.start_temp + progress * (self.final_temp - self.start_temp)
-        new_temp = max(min(new_temp, max(self.start_temp, self.final_temp)), min(self.start_temp, self.final_temp))
+
+        if self._step <= self.warmup_steps:
+            progress = float(self._step) / float(max(1, self.warmup_steps))
+            new_temp = self.start_temp + progress * (self.middle_temp - self.start_temp)
+        else:
+            cosine_steps = max(1, self.T_max - self.warmup_steps)
+            progress = min(1.0, float(self._step - self.warmup_steps) / float(cosine_steps))
+            new_temp = self.final_temp + (self.middle_temp - self.final_temp) * 0.5 * (1. + math.cos(math.pi * progress))
 
         self.actual_value = new_temp
-
         return new_temp

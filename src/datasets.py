@@ -5,6 +5,10 @@ from math import ceil
 import scipy.io
 import os
 
+num_classes = {
+    "imagenet": 1000,
+}
+
 '''
 transforms: list of transforms to apply to the same image.
 '''
@@ -19,6 +23,8 @@ class datasets(Dataset):
         self.separate_val_subset = separate_val_subset
         self.val_size = val_size
         self.times = times
+
+        self.num_classes = num_classes[dataset_name]
 
         self.images = []
         self.labels = []
@@ -96,6 +102,9 @@ class datasets(Dataset):
                             class_name = wnid_to_class[wnid]
                             class_id = class_to_id[class_name]
                             self.labels.append(class_id)
+
+    def get_num_classes(self):
+        return self.num_classes
 
     def __len__(self):
         return len(self.images)

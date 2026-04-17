@@ -1,3 +1,5 @@
+from unittest import case
+
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
@@ -257,7 +259,6 @@ class Evaluation():
             torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
             torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
             torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch_{epoch}.pth"))
-            
 
     def _load_models(self):
         def __try_load_models():
@@ -272,197 +273,207 @@ class Evaluation():
                 self.model_type = "random_resnet50"
                 return
 
-            try:
-                self.encoder = simclr_resnet50(self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "simclr_resnet50"
-                return
-            except Exception as e:
-                errors.append(("simclr_resnet50", str(e)))
+            match self.meta_framework:
+                case "simclr":
+                    try:
+                        self.encoder = simclr_resnet50(self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "simclr_resnet50"
+                        return
+                    except Exception as e:
+                        errors.append(("simclr_resnet50", str(e)))
 
-            try:
-                self.encoder = byol_resnet50(self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "byol_resnet50"
-                return
-            except Exception as e:
-                errors.append(("byol_resnet50", str(e)))
+                case "byol":
+                    try:
+                        self.encoder = byol_resnet50(self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "byol_resnet50"
+                        return
+                    except Exception as e:
+                        errors.append(("byol_resnet50", str(e)))
+                    
+                    try:
+                        self.encoder = byol_resnet200(self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "byol_resnet200"
+                        return
+                    except Exception as e:
+                        errors.append(("byol_resnet200", str(e)))
             
-            try:
-                self.encoder = byol_resnet200(self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "byol_resnet200"
-                return
-            except Exception as e:
-                errors.append(("byol_resnet200", str(e)))
+                case "ijepa":
+                    try:
+                        self.encoder = ijepa_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_tiny_16"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_tiny_16", str(e)))
+                    
+                    try:
+                        self.encoder = ijepa_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=14)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_tiny_14"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_tiny_14", str(e)))
 
-            try:
-                self.encoder = ijepa_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_tiny_16"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_tiny_16", str(e)))
+                    try:
+                        self.encoder = ijepa_vit_small(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_small_16"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_small_16", str(e)))
+                    
+                    try:
+                        self.encoder = ijepa_vit_small(checkpoint=self.meta_checkpoint, patch_size=14)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_small_14"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_small_14", str(e)))
+
+                    try:
+                        self.encoder = ijepa_vit_base(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_base_16"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_base_16", str(e)))
+                    
+                    try:
+                        self.encoder = ijepa_vit_base(checkpoint=self.meta_checkpoint, patch_size=14)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_base_14"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_base_14", str(e)))
+
+                    try:
+                        self.encoder = ijepa_vit_large(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_large_16"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_large_16", str(e)))
+
+                    try:
+                        self.encoder = ijepa_vit_large(checkpoint=self.meta_checkpoint, patch_size=14)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_large_14"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_large_14", str(e)))
+
+                    try:
+                        self.encoder = ijepa_vit_huge(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_huge_16"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_huge_16", str(e)))
+                    
+                    try:
+                        self.encoder = ijepa_vit_huge(checkpoint=self.meta_checkpoint, patch_size=14)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_huge_14"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_huge_14", str(e)))
+
+                    try:
+                        self.encoder = ijepa_vit_giant(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_giant_16"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_giant_16", str(e)))
+                    
+                    try:
+                        self.encoder = ijepa_vit_giant(checkpoint=self.meta_checkpoint, patch_size=14)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "ijepa_vit_giant_14"
+                        return
+                    except Exception as e:
+                        errors.append(("ijepa_vit_giant_14", str(e)))
             
-            try:
-                self.encoder = ijepa_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=14)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_tiny_14"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_tiny_14", str(e)))
+                case "swav":
+                    try:
+                        self.encoder = swav_resnet50(self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "swav_resnet50"
+                        return
+                    except Exception as e:
+                        errors.append(("swav_resnet50", str(e)))
 
-            try:
-                self.encoder = ijepa_vit_small(checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_small_16"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_small_16", str(e)))
-            
-            try:
-                self.encoder = ijepa_vit_small(checkpoint=self.meta_checkpoint, patch_size=14)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_small_14"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_small_14", str(e)))
+                case "mae":
+                    try:
+                        self.encoder = mae_vit_tiny_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "mae_vit_tiny_patch16"
+                        return
+                    except Exception as e:
+                        errors.append(("mae_vit_tiny_patch16", str(e)))
 
-            try:
-                self.encoder = ijepa_vit_base(checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_base_16"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_base_16", str(e)))
-            
-            try:
-                self.encoder = ijepa_vit_base(checkpoint=self.meta_checkpoint, patch_size=14)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_base_14"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_base_14", str(e)))
+                    try:
+                        self.encoder = mae_vit_small_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "mae_vit_small_patch16"
+                        return
+                    except Exception as e:
+                        errors.append(("mae_vit_small_patch16", str(e)))
 
-            try:
-                self.encoder = ijepa_vit_large(checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_large_16"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_large_16", str(e)))
+                    try:
+                        self.encoder = mae_vit_base_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "mae_vit_base_patch16"
+                        return
+                    except Exception as e:
+                        errors.append(("mae_vit_base_patch16", str(e)))
 
-            try:
-                self.encoder = ijepa_vit_large(checkpoint=self.meta_checkpoint, patch_size=14)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_large_14"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_large_14", str(e)))
+                    try:
+                        self.encoder = mae_vit_large_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "mae_vit_large_patch16"
+                        return
+                    except Exception as e:
+                        errors.append(("mae_vit_large_patch16", str(e)))
 
-            try:
-                self.encoder = ijepa_vit_huge(checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_huge_16"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_huge_16", str(e)))
-            
-            try:
-                self.encoder = ijepa_vit_huge(checkpoint=self.meta_checkpoint, patch_size=14)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_huge_14"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_huge_14", str(e)))
+                    try:
+                        self.encoder = mae_vit_huge_patch14(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "mae_vit_huge_patch14"
+                        return
+                    except Exception as e:
+                        errors.append(("mae_vit_huge_patch14", str(e)))
 
-            try:
-                self.encoder = ijepa_vit_giant(checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_giant_16"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_giant_16", str(e)))
-            
-            try:
-                self.encoder = ijepa_vit_giant(checkpoint=self.meta_checkpoint, patch_size=14)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "ijepa_vit_giant_14"
-                return
-            except Exception as e:
-                errors.append(("ijepa_vit_giant_14", str(e)))
-            
-            try:
-                self.encoder = swav_resnet50(self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "swav_resnet50"
-                return
-            except Exception as e:
-                errors.append(("swav_resnet50", str(e)))
+                case "dinov1":
+                    try:
+                        self.encoder = dinov1_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "dinov1_vit_tiny_16"
+                        return
+                    except Exception as e:
+                        errors.append(("dinov1_vit_tiny_16", str(e)))
 
-            try:
-                self.encoder = mae_vit_tiny_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "mae_vit_tiny_patch16"
-                return
-            except Exception as e:
-                errors.append(("mae_vit_tiny_patch16", str(e)))
+                    try:
+                        self.encoder = dinov1_vit_small(use_checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "dinov1_vit_small_16"
+                        return
+                    except Exception as e:
+                        errors.append(("dinov1_vit_small_16", str(e)))
 
-            try:
-                self.encoder = mae_vit_small_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "mae_vit_small_patch16"
-                return
-            except Exception as e:
-                errors.append(("mae_vit_small_patch16", str(e)))
-
-            try:
-                self.encoder = mae_vit_base_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "mae_vit_base_patch16"
-                return
-            except Exception as e:
-                errors.append(("mae_vit_base_patch16", str(e)))
-
-            try:
-                self.encoder = mae_vit_large_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "mae_vit_large_patch16"
-                return
-            except Exception as e:
-                errors.append(("mae_vit_large_patch16", str(e)))
-
-            try:
-                self.encoder = mae_vit_huge_patch14(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "mae_vit_huge_patch14"
-                return
-            except Exception as e:
-                errors.append(("mae_vit_huge_patch14", str(e)))
-
-            try:
-                self.encoder = dinov1_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "dinov1_vit_tiny_16"
-                return
-            except Exception as e:
-                errors.append(("dinov1_vit_tiny_16", str(e)))
-
-            try:
-                self.encoder = dinov1_vit_small(use_checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "dinov1_vit_small_16"
-                return
-            except Exception as e:
-                errors.append(("dinov1_vit_small_16", str(e)))
-
-            try:
-                self.encoder = dinov1_vit_base(checkpoint=self.meta_checkpoint, patch_size=16)
-                self.encoder.load_weights(self.evaluate_weights, device=self.device)
-                self.model_type = "dinov1_vit_base_16"
-                return
-            except Exception as e:
-                errors.append(("dinov1_vit_base_16", str(e)))
+                    try:
+                        self.encoder = dinov1_vit_base(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.model_type = "dinov1_vit_base_16"
+                        return
+                    except Exception as e:
+                        errors.append(("dinov1_vit_base_16", str(e)))
+                
+                case _:
+                    errors.append(("unknown_framework", f"Unsupported framework: {self.meta_framework}"))
 
             raise ValueError(
                 f"Failed to load weights from {self.evaluate_weights}. Errors: {errors}."
@@ -470,7 +481,7 @@ class Evaluation():
 
         __try_load_models()
 
-        if "mae" in self.model_type:
+        if self.meta_framework == "mae":
             self.linear_head = LinearHead(self.encoder.get_output_dim(), self.train_dataset.get_num_classes(), batch_norm=True).to(self.device)
         else:
             self.linear_head = LinearHead(self.encoder.get_output_dim(), self.train_dataset.get_num_classes()).to(self.device)
@@ -726,6 +737,7 @@ class Evaluation():
         self.meta_mode = str(self.config["meta"]["mode"])
         self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
         self.meta_save_every = int(self.config["meta"]["save_every"])
+        self.meta_framework = self.config["meta"]["framework"]
 
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
         self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))

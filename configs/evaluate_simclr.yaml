@@ -39,6 +39,7 @@ meta:
   mode: linear_eval
   pretrained_weights: null # Path to the pretrained weights file. Set to null if you don't want to load pretrained weights.
   save_every: 0 # Set to 0 if you don't want to save intermediate checkpoints during training
+  framework: simclr # Pass null if none of the frameworks was used (e.g., supervised_resnet50, random_resnet50, etc.)
 
 optimization:
   ipe_scale: 1.0

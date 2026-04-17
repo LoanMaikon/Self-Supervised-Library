@@ -404,8 +404,8 @@ class DINOv1():
         
         self.encoder.train()
         self.projection_head.train()
-        self.target_encoder.eval()
-        self.target_projection_head.eval()
+        self.target_encoder.train()
+        self.target_projection_head.train()
 
     def _load_config(self):
         self.data_datasets_path = str(self.config["data"]["datasets_path"])

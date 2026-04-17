@@ -28,9 +28,6 @@ data:
     crop_ratio:
       - 0.75
       - 1.3333333333333333
-    color_jitter: true
-    gaussian_blur: true
-    horizontal_flip: true
     crop_size: 224
   local_views:
     num: 6
@@ -40,9 +37,6 @@ data:
     crop_ratio:
       - 0.75
       - 1.3333333333333333
-    color_jitter: true
-    gaussian_blur: true
-    horizontal_flip: true
     crop_size: 96
 
 meta:
@@ -50,11 +44,14 @@ meta:
   checkpoint: false
   pretrained_weights: null # Path to the pretrained weights file. Set to null if you don't want to load pretrained weights.
   save_every: 0 # Set to 0 if you don't want to save intermediate checkpoints during training
+  patch_size: 16
   projection_head:
-    input_dim: 1024
     hidden_dim: 2048
     bottleneck_dim: 256
     output_dim: 65536
+    use_bn: false
+    norm_last_layer: true
+    n_layers: 3
 
 optimization:
   ipe_scale: 1.0

@@ -4,6 +4,7 @@ import yaml
 import os
 
 from src.methods.evaluation.Evaluation import Evaluation
+from src.methods.dinov1.DINOv1 import DINOv1
 from src.methods.simclr.SimCLR import SimCLR
 from src.methods.ijepa.IJEPA import IJEPA
 from src.methods.swav.SwAV import SwAV
@@ -127,6 +128,16 @@ class Model():
                     world_size=self.world_size,
                     continue_training=self.continue_training,
                 )
+            
+            case "dinov1":
+                self.method = DINOv1(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    continue_training=self.continue_training,
+                )
 
             case _:
-                raise ValueError(f"Unsupported mode '{self.mode}'. Supported modes are: linear_evaluation, fine_tuning, simclr, byol, ijepa, swav and mae.")
+                raise ValueError(f"Unsupported mode '{self.mode}'. Supported modes are: evaluate, simclr, byol, ijepa, swav, mae and dinov1.")

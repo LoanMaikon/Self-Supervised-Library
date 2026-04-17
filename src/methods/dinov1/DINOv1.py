@@ -4,6 +4,7 @@ from torchvision.transforms import v2
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
+from PIL import ImageOps
 import torch
 import copy
 import os
@@ -12,6 +13,7 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
     recreate_csv_log, get_last_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearTemperatureSchedule
+from models import vit_base, vit_small, vit_tiny, projection_head
 from src.datasets import datasets
 
 class DINOv1():
@@ -62,31 +64,276 @@ class DINOv1():
         pass
 
     def save_models(self, epoch):
-        pass
+        if not is_main_process():
+            return
+        
+        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
+        
+        encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
+        projection_head_state_dict = self.projection_head.module.state_dict() if self.world_size > 1 else self.projection_head.state_dict()
+        target_encoder_state_dict = self.target_encoder.state_dict()
+        target_projection_head_state_dict = self.target_projection_head.state_dict()
+        optimizer_state_dict = self.optimizer.state_dict()
+        lr_scheduler_state_dict = self.lr_scheduler.state_dict()
+        wd_scheduler_state_dict = self.wd_scheduler.state_dict()
+        ema_scheduler_state_dict = self.ema_scheduler.state_dict()
+        scaler_state_dict = self.scaler.state_dict()
+
+        torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder.pth"))
+        torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head.pth"))
+        torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder.pth"))
+        torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", f"target_projection_head.pth"))
+        torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer.pth"))
+        torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler.pth"))
+        torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler.pth"))
+        torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler.pth"))
+        torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler.pth"))
+
+        if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
+            torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
+            torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head_epoch_{epoch}.pth"))
+            torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder_epoch_{epoch}.pth"))
+            torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", f"target_projection_head_epoch_{epoch}.pth"))
+            torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch_{epoch}.pth"))
+            torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
+            torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
+            torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_epoch_{epoch}.pth"))
+            torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch_{epoch}.pth"))
 
     def update_target_network(self, ema):
-        pass
+        with torch.no_grad():
+            for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+                param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
+
+            for param_q, param_k in zip(self.projection_head.parameters(), self.target_projection_head.parameters()):
+                param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
 
     def _load_schedulers(self):
-        pass
+        self.lr_scheduler = WarmupCosineSchedule(
+            optimizer=self.optimizer,
+            warmup_steps=self.optimization_warmup_epochs * len(self.train_dataloader),
+            start_lr=self.optimization_lr[0],
+            middle_lr=self.optimization_lr[1],
+            final_lr=self.optimization_lr[2],
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
+
+        self.wd_scheduler = CosineWDSchedule(
+            optimizer=self.optimizer,
+            start_wd=self.optimization_weight_decay[0],
+            final_wd=self.optimization_weight_decay[1],
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
+
+        self.ema_scheduler = EMACosineSchedule(
+            start_ema=self.optimization_ema[0],
+            final_ema=self.optimization_ema[1],
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
 
     def _load_optimizer(self):
-        pass
+        match self.optimization_optimizer:
+            case "adamw":
+                target_modules = [self.encoder, self.projection_head] if self.world_size == 1 else [self.encoder.module, self.projection_head.module]
 
-    def _load_criterion(self):
-        pass
+                decay_params = []
+                no_decay_params = []
 
-    def apply_criterion(self, z1, z2):
-        pass
+                for module in target_modules:
+                    for name, p in module.named_parameters():
+                        if not p.requires_grad:
+                            continue
+
+                        if p.ndim > 1 and "bias" not in name:
+                            decay_params.append(p)
+                        else:
+                            no_decay_params.append(p)
+
+                param_groups = [
+                    {
+                        "params": decay_params,
+                        "weight_decay": self.optimization_weight_decay[0],
+                        "WD_exclude": False
+                    },
+                    {
+                        "params": no_decay_params,
+                        "weight_decay": 0.0,
+                        "WD_exclude": True
+                    },
+                ]
+
+                self.optimizer = optim.AdamW(
+                    param_groups,
+                    lr=self.optimization_lr[0],
+                )
+
+            case _:
+                raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
 
     def _load_dataloader(self):
-        pass
+        self.train_dataset = datasets(
+            operation="train",
+            datasets_folder_path=self.data_datasets_path,
+            dataset_name=self.data_train_dataset,
+            separate_val_subset=self.data_separate_val_subset_use,
+            val_size=self.data_separate_val_subset_size,
+            transforms=[self.global_transform_1, self.global_transform_2, self.local_transform],
+            times=[1, 1, self.data_local_views_num]
+        )
+
+        self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)
+
+        self.train_dataloader = torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_size=self.data_batch_size,
+            sampler=self.train_sampler,
+            num_workers=self.data_num_workers,
+            prefetch_factor=self.data_prefetch_factor,
+            pin_memory=self.data_pin_memory,
+            drop_last=self.data_drop_last,
+        )
 
     def _load_transform(self):
-        pass
+        flip_and_color_jitter = v2.Compose([
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomApply(
+                [v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                p=0.8
+            ),
+            v2.RandomGrayscale(p=0.2),
+        ])
+
+        self.global_transform_1 = v2.Compose([
+            v2.RandomResizedCrop(size=self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
+            flip_and_color_jitter,
+            v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1, sigma=(0.1, 2.0)),
+            v2.Normalize(mean=tuple(self.data_normalize_mean), std=tuple(self.data_normalize_std)),
+        ])
+
+        self.global_transform_2 = v2.Compose([
+            v2.RandomResizedCrop(size=self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
+            flip_and_color_jitter,
+            v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.1),
+            v2.RandomApply([ImageOps.solarize], p=0.2),
+            v2.Normalize(mean=tuple(self.data_normalize_mean), std=tuple(self.data_normalize_std)),
+        ])
+
+        self.local_transform = v2.Compose([
+            v2.RandomResizedCrop(size=self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio)),
+            flip_and_color_jitter,
+            v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_local_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.5),
+            v2.RandomApply([ImageOps.solarize], p=0.5),
+            v2.Normalize(mean=tuple(self.data_normalize_mean), std=tuple(self.data_normalize_std)),
+        ])
 
     def _load_models(self):
-        pass
+        match self.meta_model_name:
+            case "vit_tiny":
+                self.encoder = vit_tiny(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
+            case "vit_small":
+                self.encoder = vit_small(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
+            case "vit_base":
+                self.encoder = vit_base(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
+            
+        self.projection_head = projection_head(
+            input_dim=self.encoder.embed_dim,
+            hidden_dim=self.meta_projection_head_hidden_dim,
+            bottleneck_dim=self.meta_projection_head_bottleneck_dim,
+            output_dim=self.meta_projection_head_output_dim,
+            use_bn=self.meta_projection_head_use_bn,
+            norm_last_layer=self.meta_projection_head_norm_last_layer,
+            n_layers=self.meta_projection_head_n_layers,
+            use_checkpoint=self.meta_checkpoint,
+        )
+
+        if self.meta_pretrained_weights is not None:
+            if os.path.exists(self.meta_pretrained_weights):
+                self.encoder.load_weights(
+                    weight_path=self.meta_pretrained_weights,
+                    device=self.device
+                )
+            else:
+                raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
+        
+        self.target_encoder = copy.deepcopy(self.encoder)
+        self.target_encoder.checkpoint = False # Target model should not use checkpointing
+        self.target_projection_head = copy.deepcopy(self.projection_head)
+        self.target_projection_head.checkpoint = False # Target projection head should not use checkpointing
+
+        if self.continue_training:
+            if os.path.exists(os.path.join(self.output_folder, "models")):
+                self.encoder.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"encoder.pth"), map_location=self.device))
+                self.projection_head.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"projection_head.pth"), map_location=self.device))
+                self.target_encoder.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_encoder.pth"), map_location=self.device))
+                self.target_projection_head.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_projection_head.pth"), map_location=self.device))
+            else:
+                raise FileNotFoundError(f"Model checkpoint files not found in {os.path.join(self.output_folder, 'models')}.")
+        
+        self.encoder.unfreeze()
+        self.projection_head.unfreeze()
+        self.target_encoder.freeze()
+        self.target_projection_head.freeze()
+
+        self.encoder.to(self.device)
+        self.projection_head.to(self.device)
+        self.target_encoder.to(self.device)
+        self.target_projection_head.to(self.device)
+
+        if self.world_size > 1:
+            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
+            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
+        
+        self.encoder.train()
+        self.projection_head.train()
+        self.target_encoder.eval()
+        self.target_projection_head.eval()
 
     def _load_config(self):
-        pass
+        self.data_datasets_path = str(self.config["data"]["datasets_path"])
+        self.data_train_dataset = str(self.config["data"]["train_dataset"])
+        self.data_batch_size = int(self.config["data"]["batch_size"])
+        self.data_num_workers = int(self.config["data"]["num_workers"])
+        self.data_prefetch_factor = int(self.config["data"]["prefetch_factor"])
+        self.data_pin_memory = bool(self.config["data"]["pin_memory"])
+        self.data_drop_last = bool(self.config["data"]["drop_last"])
+        self.data_normalize_mean = map(float, self.config["data"]["normalize"]["mean"])
+        self.data_normalize_std = map(float, self.config["data"]["normalize"]["std"])
+        self.data_separate_val_subset_use = bool(self.config["data"]["separate_val_subset"]["use"])
+        self.data_separate_val_subset_size = float(self.config["data"]["separate_val_subset"]["size"])
+        self.data_global_views_num = int(self.config["data"]["global_views"]["num"])
+        self.data_global_views_crop_scale = list(map(float, self.config["data"]["global_views"]["crop_scale"]))
+        self.data_global_views_crop_ratio = list(map(float, self.config["data"]["global_views"]["crop_ratio"]))
+        self.data_global_views_crop_size = int(self.config["data"]["global_views"]["crop_size"])
+        self.data_local_views_num = int(self.config["data"]["local_views"]["num"])
+        self.data_local_views_crop_scale = list(map(float, self.config["data"]["local_views"]["crop_scale"]))
+        self.data_local_views_crop_ratio = list(map(float, self.config["data"]["local_views"]["crop_ratio"]))
+        self.data_local_views_crop_size = int(self.config["data"]["local_views"]["crop_size"])
+
+        self.meta_model_name = str(self.config["meta"]["model_name"])
+        self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
+        self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
+        self.meta_save_every = int(self.config["meta"]["save_every"])
+        self.meta_patch_size = int(self.config["meta"]["patch_size"])
+        self.meta_projection_head_hidden_dim = int(self.config["meta"]["projection_head"]["hidden_dim"])
+        self.meta_projection_head_bottleneck_dim = int(self.config["meta"]["projection_head"]["bottleneck_dim"])
+        self.meta_projection_head_output_dim = int(self.config["meta"]["projection_head"]["output_dim"])
+        self.meta_projection_head_use_bn = bool(self.config["meta"]["projection_head"]["use_bn"])
+        self.meta_projection_head_norm_last_layer = bool(self.config["meta"]["projection_head"]["norm_last_layer"])
+        self.meta_projection_head_n_layers = int(self.config["meta"]["projection_head"]["n_layers"])
+
+        self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
+        self.optimization_ema = list(map(float, self.config["optimization"]["ema"]))
+        self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))
+        self.optimization_weight_decay = list(map(float, self.config["optimization"]["weight_decay"]))
+        self.optimization_epochs = int(self.config["optimization"]["epochs"])
+        self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
+        self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
+        self.optimization_sinkhorn_epsilon = float(self.config["optimization"]["sinkhorn_epsilon"])
+        self.optimization_sinkhorn_iterations = int(self.config["optimization"]["sinkhorn_iterations"])
+        self.optimization_temperature_student = list(map(float, self.config["optimization"]["temperature_student"]))
+        self.optimization_temperature_teacher = list(map(float, self.config["optimization"]["temperature_teacher"]))
+        self.optimization_tempereature_warmup = int(self.config["optimization"]["tempereature_warmup"])
+
+        self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

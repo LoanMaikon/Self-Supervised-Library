@@ -8,9 +8,9 @@ import torch
 import copy
 import os
 
-from .models import repeat_interleave_batch, vit_predictor, vit_tiny, vit_small, vit_base, vit_large, vit_huge, vit_giant, apply_masks, repeat_interleave_batch
+from .models import vit_predictor, vit_tiny, vit_small, vit_base, vit_large, vit_huge, vit_giant, apply_masks
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, repeat_interleave_batch
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
 from .mask_collator import MaskCollator
 from src.datasets import datasets

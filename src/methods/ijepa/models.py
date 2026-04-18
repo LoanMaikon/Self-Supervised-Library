@@ -7,7 +7,7 @@ import torch
 import math
 
 from src.pos_embed import get_2d_sincos_pos_embed
-from src.utils import trunc_normal_
+from src.utils import trunc_normal_, repeat_interleave_batch
 
 """
 :param x: tensor of shape [B (batch-size), N (num-patches), D (feature-dim)]

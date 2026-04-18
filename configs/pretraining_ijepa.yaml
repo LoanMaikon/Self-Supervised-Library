@@ -57,7 +57,7 @@ optimization:
   weight_decay:
   - 0.04
   - 0.4
-  epochs: 300
+  epochs: 100
   warmup_epochs: 15
   optimizer: adamw
   criterion: mse_loss

@@ -81,7 +81,7 @@ def get_last_epoch(output_folder):
     
     return last_epoch_data.get("last_epoch", 0)
 
-def load_last_values(output_folder, last_epoch, test=False):
+def load_last_values(output_folder, last_epoch, test=False, val=False):
     lr_values = []
     wd_values = []
     ema_values = []
@@ -89,6 +89,9 @@ def load_last_values(output_folder, last_epoch, test=False):
     test_top1 = []
     test_top5 = []
     test_loss = []
+    val_top1 = []
+    val_top5 = []
+    val_loss = []
 
     csv_path = os.path.join(output_folder, "log.csv")
     with open(csv_path, "r") as f:
@@ -115,7 +118,16 @@ def load_last_values(output_folder, last_epoch, test=False):
         test_top5.extend(test_info_json.get("test_top5", []))
         test_loss.extend(test_info_json.get("test_loss", []))
 
-        return lr_values, wd_values, ema_values, train_loss, test_top1, test_top5, test_loss
+        if val:
+            val_info_json = json.load(open(os.path.join(output_folder, "validation_info.json"), "r"))
+            val_top1.extend(val_info_json.get("val_top1", []))
+            val_top5.extend(val_info_json.get("val_top5", []))
+            val_loss.extend(val_info_json.get("val_loss", []))
+
+            return lr_values, wd_values, ema_values, train_loss, test_top1, test_top5, test_loss, val_top1, val_top5, val_loss
+
+        else:
+            return lr_values, wd_values, ema_values, train_loss, test_top1, test_top5, test_loss
 
     return lr_values, wd_values, ema_values, train_loss
 

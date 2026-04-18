@@ -54,8 +54,9 @@ class Evaluation():
 
         self.train_loss = []
         if self.has_val():
+            self.val_top1 = []
+            self.val_top5 = []
             self.val_loss = []
-            self.val_accuracy = []
         self.lr_values = []
         self.wd_values = []
         self.test_top1 = []
@@ -69,7 +70,10 @@ class Evaluation():
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
-            self.lr_values, self.wd_values, _, self.train_loss, self.test_top1, self.test_top5, self.test_loss = load_last_values(self.output_folder, self.last_epoch, test=True)
+            if self.has_val():
+                self.lr_values, self.wd_values, _, self.train_loss, self.test_top1, self.test_top5, self.test_loss, self.val_top1, self.val_top5, self.val_loss = load_last_values(self.output_folder, self.last_epoch, val=True, test=True)
+            else:
+                self.lr_values, self.wd_values, _, self.train_loss, self.test_top1, self.test_top5, self.test_loss = load_last_values(self.output_folder, self.last_epoch, test=True)
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
     
@@ -125,15 +129,12 @@ class Evaluation():
 
             write_on_log(f"Train loss: {self.train_loss[-1]}", self.output_folder)
 
-            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
-            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
-            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
-
             test_dict = self.test()
 
             if self.has_val():
                 self.val_loss.append(0.0)
-                self.val_accuracy.append(0.0)
+                self.val_top1.append(0.0)
+                self.val_top5.append(0.0)
 
                 self.encoder.eval()
                 self.linear_head.eval()
@@ -150,35 +151,39 @@ class Evaluation():
                         output = self.linear_head(features)
 
                         loss = self.apply_criterion(output, labels)
-                        accuracy = (output.argmax(dim=1) == labels).float().mean().item()
-
-                        num_samples += images.size(0)
-
+                        
                         self.val_loss[-1] += loss.item() * images.size(0)
-                        self.val_accuracy[-1] += accuracy * images.size(0)
+                        self.val_top1[-1] += (output.argmax(dim=1) == labels).float().sum().item()
+                        self.val_top5[-1] += (output.topk(5, dim=1).indices == labels.unsqueeze(1)).any(dim=1).float().sum().item()
 
+                        num_samples += images.size(0)            
+            
                 if dist.is_available() and dist.is_initialized():
                     val_metrics = torch.tensor(
-                        [self.val_loss[-1], self.val_accuracy[-1], float(num_samples)],
+                        [self.val_loss[-1], self.val_top1[-1], self.val_top5[-1], float(num_samples)],
                         device=self.device,
                         dtype=torch.float64,
                     )
                     dist.all_reduce(val_metrics, op=dist.ReduceOp.SUM)
-                    self.val_loss[-1], self.val_accuracy[-1], num_samples = val_metrics.tolist()
+                    self.val_loss[-1], self.val_top1[-1], self.val_top5[-1], num_samples = val_metrics.tolist()
                     num_samples = int(num_samples)
 
                 self.val_loss[-1] /= num_samples
-                self.val_accuracy[-1] /= num_samples
+                self.val_top1[-1] /= num_samples
+                self.val_top5[-1] /= num_samples
 
                 write_on_log(f"Validation loss: {self.val_loss[-1]}", self.output_folder)
-                write_on_log(f"Validation accuracy: {self.val_accuracy[-1]}", self.output_folder)
+                write_on_log(f"Validation top-1: {self.val_top1[-1]}", self.output_folder)
+                write_on_log(f"Validation top-5: {self.val_top5[-1]}", self.output_folder)
 
                 plot_fig(range(len(self.val_loss)), "Epoch", self.val_loss, "Loss", f"val_loss", self.output_folder)
-                plot_fig(range(len(self.val_accuracy)), "Epoch", self.val_accuracy, "Accuracy", f"val_accuracy", self.output_folder)
+                plot_fig(range(len(self.val_top1)), "Epoch", self.val_top1, "Top-1y", f"val_top1", self.output_folder)
+                plot_fig(range(len(self.val_top5)), "Epoch", self.val_top5, "Top-5y", f"val_top5", self.output_folder)
 
                 save_json({
                     "val_loss": self.val_loss,
-                    "val_accuracy": self.val_accuracy
+                    "val_top1": self.val_top1,
+                    "val_top5": self.val_top5,
                 }, self.output_folder, "validation_info")
 
             save_json({
@@ -186,6 +191,13 @@ class Evaluation():
             }, self.output_folder, "training_info")
 
             save_json(test_dict, self.output_folder, "testing_info")
+
+            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
+            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
+            plot_fig(range(len(self.test_top1)), "Epoch", self.test_top1, "Test Top-1", f"test_top1", self.output_folder)
+            plot_fig(range(len(self.test_top5)), "Epoch", self.test_top5, "Test Top-5", f"test_top5", self.output_folder)
+            plot_fig(range(len(self.test_loss)), "Epoch", self.test_loss, "Test Loss", f"test_loss", self.output_folder)
 
             self.save_models(epoch)
 
@@ -232,8 +244,8 @@ class Evaluation():
         self.test_top5[-1] /= num_samples
 
         write_on_log(f"Test loss: {self.test_loss[-1]}", self.output_folder)
-        write_on_log(f"Test accuracy: {self.test_top1[-1]}", self.output_folder)
-        write_on_log(f"Test top-5 accuracy: {self.test_top5[-1]}", self.output_folder)
+        write_on_log(f"Test top-1: {self.test_top1[-1]}", self.output_folder)
+        write_on_log(f"Test top-5: {self.test_top5[-1]}", self.output_folder)
 
         return {
             "test_loss": self.test_loss,

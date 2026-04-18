@@ -22,6 +22,7 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .linear_head import LinearHead
 from src.datasets import datasets
+from src.lars import LARS
 
 class Evaluation():
     def __init__(self,
@@ -558,10 +559,11 @@ class Evaluation():
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
 
-        test_resize_size = int(round(self.data_crop_size * 256 / 224))
         self.test_transform = v2.Compose([
-            v2.Resize(test_resize_size),
-            v2.CenterCrop(self.data_crop_size),
+            v2.Compose([
+                v2.Resize((self.data_central_crop_on_test_initial_crop_size, self.data_central_crop_on_test_initial_crop_size)),
+                v2.CenterCrop(self.data_crop_size),
+            ]) if self.data_central_crop_on_test_use else v2.Resize((self.data_crop_size, self.data_crop_size)),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
@@ -658,15 +660,16 @@ class Evaluation():
                 raise ValueError(f"Unsupported criterion: {self.optimization_criterion}")
 
     def _load_optimizer(self):
+        modules = None
+        if self.meta_mode == "linear_eval":
+            modules = [self.linear_head] if self.world_size == 1 else [self.linear_head.module]
+        else:
+            modules = [self.encoder, self.linear_head] if self.world_size == 1 else [self.encoder.module, self.linear_head.module]
+
         match self.optimization_optimizer:
             case "sgd":
                 decay_params = []
                 no_decay_params = []
-
-                if self.meta_mode == "linear_eval":
-                    modules = [self.linear_head] if self.world_size == 1 else [self.linear_head.module]
-                else:
-                    modules = [self.encoder, self.linear_head] if self.world_size == 1 else [self.encoder.module, self.linear_head.module]
 
                 for module in modules:
                     for name, p in module.named_parameters():
@@ -695,6 +698,15 @@ class Evaluation():
                     param_groups,
                     lr=self.optimization_lr[0],
                     momentum=0.9,
+                )
+            
+            case "lars":
+                param_list = [p for module in modules for p in module.parameters()]
+                self.optimizer = LARS(
+                    param_list,
+                    lr=self.optimization_lr[0],
+                    momentum=0.9,
+                    weight_decay=self.optimization_weight_decay[0]
                 )
 
             case _:
@@ -757,6 +769,8 @@ class Evaluation():
         self.data_random_resized_crop_p = float(self.config["data"]["random_resized_crop"]["p"])
         self.data_random_resized_crop_scale = list(map(float, self.config["data"]["random_resized_crop"]["scale"]))
         self.data_random_resized_crop_ratio = list(map(float, self.config["data"]["random_resized_crop"]["ratio"]))
+        self.data_central_crop_on_test_use = bool(self.config["data"]["central_crop_on_test"]["use"])
+        self.data_central_crop_on_test_initial_crop_size = int(self.config["data"]["central_crop_on_test"]["initial_crop_size"])
 
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
         self.meta_mode = str(self.config["meta"]["mode"])

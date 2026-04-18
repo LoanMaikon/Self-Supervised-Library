@@ -1,6 +1,7 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
+from torch.utils.data import Subset
 import torch.distributed as dist
 import torch.optim as optim
 import torch
@@ -57,6 +58,9 @@ class Evaluation():
             self.val_accuracy = []
         self.lr_values = []
         self.wd_values = []
+        self.test_top1 = []
+        self.test_top5 = []
+        self.test_loss = []
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
@@ -65,7 +69,7 @@ class Evaluation():
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
-            self.lr_values, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
+            self.lr_values, self.wd_values, _, self.train_loss, self.test_top1, self.test_top5, self.test_loss = load_last_values(self.output_folder, self.last_epoch, test=True)
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
     
@@ -125,6 +129,8 @@ class Evaluation():
             plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
 
+            test_dict = self.test()
+
             if self.has_val():
                 self.val_loss.append(0.0)
                 self.val_accuracy.append(0.0)
@@ -171,14 +177,15 @@ class Evaluation():
                 plot_fig(range(len(self.val_accuracy)), "Epoch", self.val_accuracy, "Accuracy", f"val_accuracy", self.output_folder)
 
                 save_json({
-                    "train_loss": self.train_loss,
                     "val_loss": self.val_loss,
                     "val_accuracy": self.val_accuracy
-                }, self.output_folder, "training_info")
-            else:
-                save_json({
-                    "train_loss": self.train_loss,
-                }, self.output_folder, "training_info")
+                }, self.output_folder, "validation_info")
+
+            save_json({
+                "train_loss": self.train_loss,
+            }, self.output_folder, "training_info")
+
+            save_json(test_dict, self.output_folder, "testing_info")
 
             self.save_models(epoch)
 
@@ -189,16 +196,14 @@ class Evaluation():
     def test(self):
         write_on_log("Starting testing...", self.output_folder)
 
-        if os.path.exists(os.path.join(self.output_folder, "test_results.json")):
-            write_on_log("Test results already exist. Skipping testing.", self.output_folder)
-            return
-
         self.encoder.eval()
         self.linear_head.eval()
 
-        test_loss = 0.0
-        test_accuracy = 0.0
         num_samples = 0
+
+        self.test_top1.append(0.0)
+        self.test_top5.append(0.0)
+        self.test_loss.append(0.0)
 
         with torch.no_grad():
             for (images, labels) in self.test_dataloader:
@@ -210,25 +215,31 @@ class Evaluation():
                 output = self.linear_head(features)
 
                 loss = self.apply_criterion(output, labels)
-                accuracy = (output.argmax(dim=1) == labels).float().mean().item()
-
-                test_loss += loss.item() * images.size(0)
-                test_accuracy += accuracy * images.size(0)
+                
+                self.test_loss[-1] += loss.item() * images.size(0)
+                self.test_top1[-1] += (output.argmax(dim=1) == labels).float().sum().item()
+                self.test_top5[-1] += (output.topk(5, dim=1).indices == labels.unsqueeze(1)).any(dim=1).float().sum().item()
                 num_samples += images.size(0)
 
         if dist.is_available() and dist.is_initialized():
-            metrics = torch.tensor([test_loss, test_accuracy, float(num_samples)], device=self.device)
+            metrics = torch.tensor([self.test_loss[-1], self.test_top1[-1], self.test_top5[-1], float(num_samples)], device=self.device)
             dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
-            test_loss, test_accuracy, num_samples = metrics.tolist()
+            self.test_loss[-1], self.test_top1[-1], self.test_top5[-1], num_samples = metrics.tolist()
             num_samples = int(num_samples)
 
-        test_loss /= num_samples
-        test_accuracy /= num_samples
+        self.test_loss[-1] /= num_samples
+        self.test_top1[-1] /= num_samples
+        self.test_top5[-1] /= num_samples
 
-        write_on_log(f"Test loss: {test_loss}", self.output_folder)
-        write_on_log(f"Test accuracy: {test_accuracy}", self.output_folder)
+        write_on_log(f"Test loss: {self.test_loss[-1]}", self.output_folder)
+        write_on_log(f"Test accuracy: {self.test_top1[-1]}", self.output_folder)
+        write_on_log(f"Test top-5 accuracy: {self.test_top5[-1]}", self.output_folder)
 
-        save_json({"test_loss": test_loss, "test_accuracy": test_accuracy}, self.output_folder, "test_results")
+        return {
+            "test_loss": self.test_loss,
+            "test_top1": self.test_top1,
+            "test_top5": self.test_top5,
+        }
 
     def save_models(self, epoch):
         if not is_main_process():
@@ -577,16 +588,18 @@ class Evaluation():
                 times=[1]
             )
 
-            self.val_sampler = DistributedSampler(self.val_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=False)
+            if self.world_size > 1:
+                test_indices = list(range(self.rank, len(self.val_dataset), self.world_size))
+                self.val_dataset = Subset(self.val_dataset, test_indices)
 
             self.val_dataloader = torch.utils.data.DataLoader(
                 self.val_dataset,
                 batch_size=self.data_batch_size,
-                sampler=self.val_sampler,
                 num_workers=self.data_num_workers,
                 prefetch_factor=self.data_prefetch_factor,
                 pin_memory=self.data_pin_memory,
-                drop_last=False
+                drop_last=False,
+                shuffle=False,
             )
         
         self.test_dataset = datasets(
@@ -599,16 +612,18 @@ class Evaluation():
             times=[1]
         )
 
-        self.test_sampler = DistributedSampler(self.test_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=False)
+        if self.world_size > 1:
+            test_indices = list(range(self.rank, len(self.test_dataset), self.world_size))
+            self.test_dataset = Subset(self.test_dataset, test_indices)
 
         self.test_dataloader = torch.utils.data.DataLoader(
             self.test_dataset,
             batch_size=self.data_batch_size,
-            sampler=self.test_sampler,
             num_workers=self.data_num_workers,
             prefetch_factor=self.data_prefetch_factor,
             pin_memory=self.data_pin_memory,
-            drop_last=False
+            drop_last=False,
+            shuffle=False,
         )
     
     def has_val(self):

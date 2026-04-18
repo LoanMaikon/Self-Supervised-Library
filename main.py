@@ -20,9 +20,6 @@ def main():
     )
 
     model.train()
-
-    if model.is_evaluating():
-        model.test()
     
     cleanup_distributed()
 

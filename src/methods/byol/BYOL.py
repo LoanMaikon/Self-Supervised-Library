@@ -77,12 +77,12 @@ class BYOL():
                 x1, x2 = images[0].to(self.device, non_blocking=True), images[1].to(self.device, non_blocking=True)
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                    concat = torch.cat([x1, x2], dim=0)
+                    z_online_1 = self.encoder_prediction_head(self.encoder_projection_head(self.encoder(x1)))
+                    z_online_2 = self.encoder_prediction_head(self.encoder_projection_head(self.encoder(x2)))
+                    z_target_1 = self.target_encoder_projection_head(self.target_encoder(x1))
+                    z_target_2 = self.target_encoder_projection_head(self.target_encoder(x2))
 
-                    z_online = self.encoder_prediction_head(self.encoder_projection_head(self.encoder(concat)))
-                    z_target = self.target_encoder_projection_head(self.target_encoder(concat))
-
-                    loss = self.apply_criterion(z_online, z_target)
+                    loss = self.apply_criterion(z_online_1, z_online_2, z_target_1, z_target_2)
 
                 self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimizer)
@@ -211,10 +211,10 @@ class BYOL():
             case _:
                 raise ValueError(f"Unsupported criterion: {self.optimization_criterion}")
 
-    def apply_criterion(self, z1, z2):
+    def apply_criterion(self, online_feats_1, online_feats_2, target_feats_1, target_feats_2):
         match self.optimization_criterion:
             case "byol_loss":
-                return self.criterion(z1, z2)
+                return self.criterion(online_feats_1, online_feats_2, target_feats_1, target_feats_2)
             
             case _:
                 raise ValueError(f"Unsupported criterion: {self.optimization_criterion}")

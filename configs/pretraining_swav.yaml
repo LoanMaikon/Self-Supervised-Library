@@ -61,7 +61,7 @@ optimization:
     - 0.0048
   weight_decay:
     - 1e-6
-    - 1e-5
+    - 1e-6
   num_epochs: 100
   warmup_epochs: 10
   optimizer: lars

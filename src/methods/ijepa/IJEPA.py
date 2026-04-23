@@ -79,7 +79,7 @@ class IJEPA():
                 masks_context = [m.to(self.device) for m in masks_context]
                 masks_pred = [m.to(self.device) for m in masks_pred]
 
-                with torch.amp.autocast("cuda", dtype=torch.float16):
+                with torch.amp.autocast("cuda", dtype=torch.bfloat16):
                     z = self.encoder(images, masks_context)
                     z_pred = self.predictor(z, masks_context, masks_pred)
 

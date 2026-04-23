@@ -4,6 +4,7 @@ data:
   datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
   batch_size: 4096 # For each device, so the effective batch size is batch_size * num_devices
+  inference_batch_size: 2048 # For each device, so the effective batch size is inference_batch_size * num_devices
   crop_size: 224
   num_workers: 32 # For each device, so the effective number of workers is num_workers * num_devices
   prefetch_factor: 1

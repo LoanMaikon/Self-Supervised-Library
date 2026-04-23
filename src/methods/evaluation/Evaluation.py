@@ -608,7 +608,7 @@ class Evaluation():
 
             self.val_dataloader = torch.utils.data.DataLoader(
                 self.val_dataset,
-                batch_size=self.data_batch_size,
+                batch_size=self.data_inference_batch_size
                 num_workers=self.data_num_workers,
                 prefetch_factor=self.data_prefetch_factor,
                 pin_memory=self.data_pin_memory,
@@ -632,7 +632,7 @@ class Evaluation():
 
         self.test_dataloader = torch.utils.data.DataLoader(
             self.test_dataset,
-            batch_size=self.data_batch_size,
+            batch_size=self.data_inference_batch_size,
             num_workers=self.data_num_workers,
             prefetch_factor=self.data_prefetch_factor,
             pin_memory=self.data_pin_memory,
@@ -754,6 +754,7 @@ class Evaluation():
         self.data_datasets_path = str(self.config["data"]["datasets_path"])
         self.data_train_dataset = str(self.config["data"]["train_dataset"])
         self.data_batch_size = int(self.config["data"]["batch_size"])
+        self.data_inference_batch_size = int(self.config["data"]["inference_batch_size"])
         self.data_crop_size = int(self.config["data"]["crop_size"])
         self.data_num_workers = int(self.config["data"]["num_workers"])
         self.data_prefetch_factor = int(self.config["data"]["prefetch_factor"])

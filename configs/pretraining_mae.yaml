@@ -37,7 +37,7 @@ mask:
   mask_ratio: 0.75 # Percentage of removed masks  
 
 meta:
-  model_name: vit_small
+  model_name: vit_base
   checkpoint: false
   pretrained_weights: null # Path to the pretrained weights file. Set to null if you don't want to load pretrained weights.
   save_every: 0 # Set to 0 if you don't want to save intermediate checkpoints during training
@@ -51,6 +51,6 @@ optimization:
   weight_decay:
   - 0.05
   - 0.05
-  epochs: 300
-  warmup_epochs: 40
+  epochs: 100
+  warmup_epochs: 10
   optimizer: adamw

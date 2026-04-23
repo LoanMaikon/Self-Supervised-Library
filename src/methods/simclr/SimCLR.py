@@ -7,6 +7,7 @@ import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
     recreate_csv_log, get_last_epoch, load_last_values
+from .NanoPark import nanopark_base, nanopark_large, nanopark_small, nanopark_tiny
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, projection_head
 from src.datasets import datasets
@@ -236,6 +237,22 @@ class SimCLR():
             case "resnet50":
                 self.encoder = resnet50(use_checkpoint=self.meta_checkpoint)
                 self.projection_head = projection_head(encoder_out_features=self.encoder.fc.in_features, projection_dim=self.meta_projection_dim)
+            
+            case "nanopark_base":
+                self.encoder = nanopark_base(in_channels=3)
+                self.projection_head = projection_head(encoder_out_features=self.encoder.get_out_features(), projection_dim=self.meta_projection_dim)
+            
+            case "nanopark_large":
+                self.encoder = nanopark_large(in_channels=3)
+                self.projection_head = projection_head(encoder_out_features=self.encoder.get_out_features(), projection_dim=self.meta_projection_dim)
+
+            case "nanopark_small":
+                self.encoder = nanopark_small(in_channels=3)
+                self.projection_head = projection_head(encoder_out_features=self.encoder.get_out_features(), projection_dim=self.meta_projection_dim)
+            
+            case "nanopark_tiny":
+                self.encoder = nanopark_tiny(in_channels=3)
+                self.projection_head = projection_head(encoder_out_features=self.encoder.get_out_features(), projection_dim=self.meta_projection_dim)
 
             case _:
                 raise ValueError(f"Unsupported model name: {self.meta_model_name}")

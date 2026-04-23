@@ -9,6 +9,12 @@ data:
   prefetch_factor: 1
   pin_memory: false
   drop_last: true
+  crop_scale:
+    - 0.3
+    - 1.0
+  crop_ratio:
+    - 0.75
+    - 1.3333333333333333
   normalize:
     mean:
       - 0.485
@@ -37,11 +43,11 @@ mask:
   - 0.2
 
 meta:
-  model_name: vit_small
+  model_name: vit_base
   checkpoint: false
   predictor_depth: 6
   predictor_emb_dim: 384
-  predictor_num_heads: 6
+  predictor_num_heads: 12
   pretrained_weights: null # Path to the pretrained weights file. Set to null if you don't want to load pretrained weights.
   save_every: 0 # Set to 0 if you don't want to save intermediate checkpoints during training
 
@@ -60,4 +66,4 @@ optimization:
   epochs: 100
   warmup_epochs: 15
   optimizer: adamw
-  criterion: mse_loss
+  criterion: l1_smooth_loss

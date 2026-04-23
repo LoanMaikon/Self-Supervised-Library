@@ -287,7 +287,7 @@ class IJEPA():
 
     def _load_transform(self):
         self.transform = v2.Compose([
-            v2.Resize((self.data_crop_size, self.data_crop_size)),
+            v2.RandomResizedCrop(size=self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)
         ])
@@ -367,6 +367,8 @@ class IJEPA():
         self.data_normalize_std = list(map(float, self.config["data"]["normalize"]["std"]))
         self.data_separate_val_subset_use = bool(self.config["data"]["separate_val_subset"]["use"])
         self.data_separate_val_subset_size = float(self.config["data"]["separate_val_subset"]["size"])
+        self.data_crop_scale = list(map(float, self.config["data"]["crop_scale"]))
+        self.data_crop_ratio = list(map(float, self.config["data"]["crop_ratio"]))
 
         self.mask_target_aspect_ratio = list(map(float, self.config["mask"]["target_aspect_ratio"]))
         self.mask_context_mask_scale = list(map(float, self.config["mask"]["context_mask_scale"]))

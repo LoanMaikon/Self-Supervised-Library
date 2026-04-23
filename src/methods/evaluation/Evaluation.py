@@ -608,7 +608,7 @@ class Evaluation():
 
             self.val_dataloader = torch.utils.data.DataLoader(
                 self.val_dataset,
-                batch_size=self.data_inference_batch_size
+                batch_size=self.data_inference_batch_size,
                 num_workers=self.data_num_workers,
                 prefetch_factor=self.data_prefetch_factor,
                 pin_memory=self.data_pin_memory,

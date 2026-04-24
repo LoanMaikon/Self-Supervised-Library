@@ -13,6 +13,7 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
 from .models import vit_base, vit_large, vit_small, vit_tiny, projection_head
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearWarmupTemperatureSchedule
+from mask_collator import MaskCollator
 from torch import distributed as dist
 from src.datasets import datasets
 
@@ -67,7 +68,22 @@ class iBOT():
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
     def train(self):
-        pass
+        write_on_log("Starting training...", self.output_folder)
+
+        for epoch in range(1, self.optimization_epochs + 1):
+            if self.continue_training and epoch <= self.last_epoch:
+                continue
+
+            write_on_log(f"Epoch {epoch}/{self.optimization_epochs}", self.output_folder)
+            self.train_sampler.set_epoch(epoch)
+
+            self.train_loss.append(0.0)
+            num_samples = 0
+
+            for iteration, ((images, _), masks) in enumerate(self.train_dataloader):
+                # . . .
+                
+                pass
 
     def save_models(self, epoch):
         if not is_main_process():
@@ -241,6 +257,17 @@ class iBOT():
                 raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
 
     def _load_dataloader(self):
+        mask_collator = MaskCollator(
+            patch_size=self.meta_patch_size,
+            global_crop_size=self.data_global_views_crop_size,
+            local_crop_size=self.data_local_views_crop_size,
+            pred_ratio=self.meta_mask_ratio,
+            pred_ratio_var=self.meta_mask_ratio_var,
+            pred_aspect_ratio=self.meta_mask_ratio_var,
+            num_global_crops=self.data_global_views_num,
+            num_local_crops=self.data_local_views_num,
+        )
+
         self.train_dataset = datasets(
             operation="train",
             datasets_folder_path=self.data_datasets_path,
@@ -261,6 +288,7 @@ class iBOT():
             prefetch_factor=self.data_prefetch_factor,
             pin_memory=self.data_pin_memory,
             drop_last=self.data_drop_last,
+            collate_fn=mask_collator,
         )
 
     def _load_transform(self):
@@ -272,7 +300,7 @@ class iBOT():
 
             return v2.Compose([rnd_color_jitter, rnd_gray])
     
-        self.global_transform1 = v2.Compose([
+        self.global_transform_1 = v2.Compose([
             v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
             v2.RandomHorizontalFlip(p=0.5),
             __get_color_distortion(strength=1.0),
@@ -281,7 +309,7 @@ class iBOT():
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
 
-        self.global_transform2 = v2.Compose([
+        self.global_transform_2 = v2.Compose([
             v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
             v2.RandomHorizontalFlip(p=0.5),
             __get_color_distortion(strength=0.4),

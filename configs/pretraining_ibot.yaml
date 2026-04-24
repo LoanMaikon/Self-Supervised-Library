@@ -75,7 +75,11 @@ optimization:
   epochs: 100
   warmup_epochs: 10
   optimizer: adamw
-  temperature_student:
+  temperature_student_patch:
+  - 0.1
+  - 0.1
+  - 0.1
+  temperature_student_cls:
   - 0.1
   - 0.1
   - 0.1

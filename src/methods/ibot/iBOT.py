@@ -1,6 +1,7 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
+import torch.distributed as dist
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
@@ -81,9 +82,107 @@ class iBOT():
             num_samples = 0
 
             for iteration, ((images, _), masks) in enumerate(self.train_dataloader):
-                # . . .
+                self.optimizer.zero_grad()
+
+                images = [img.to(self.device, non_blocking=True) for img in images]
+                masks = [mask.to(self.device, non_blocking=True) for mask in masks]
+
+                with torch.amp.autocast(device_type=self.device.type):
+                    
+                    # Global Views
+                    teacher_output = self.target_encoder(images[:self.data_global_views_num])
+                    teacher_output = self.target_projection_head(teacher_output)
+
+                    student_output = self.encoder(images[:self.data_global_views_num], mask=masks[:self.data_global_views_num])
+                    student_output = self.projection_head(student_output)
+
+                    # Local Views
+                    if self.world_size > 1:
+                        self.encoder.module.backbone.masked_im_modeling = False
+                    else:
+                        self.encoder.backbone.masked_im_modeling = False
+                    student_local_cls = self.encoder(images[self.data_global_views_num:])[0] if len(images) > self.data_global_views_num else None
+                    if self.world_size > 1:
+                        self.encoder.module.backbone.masked_im_modeling = True
+                    else:
+                        self.encoder.backbone.masked_im_modeling = True
+
+                    # Loss
+                    student_cls, student_patch = student_output
+                    teacher_cls, teacher_patch = teacher_output
+
+                    if student_local_cls is not None:
+                        student_cls = torch.cat([student_cls, student_local_cls])
+                    
+                    student_cls = student_cls / self.student_cls_temperature_scheduler.get_temperature()
+                    student_cls_c = student_cls.chunk(self.data_global_views_num + self.data_local_views_num)
+                    student_patch = student_patch / self.student_patch_temperature_scheduler.get_temperature()
+                    student_patch_c = student_patch.chunk(self.data_global_views_num)
+
+                    teacher_cls_c = F.softmax((teacher_cls - self.center_cls) / self.teacher_cls_temperature_scheduler.get_temperature(), dim=-1)
+                    teacher_cls_c = teacher_cls_c.detach().chunk(self.data_global_views_num)
+                    teacher_patch_c = F.softmax((teacher_patch - self.center_patch) / self.teacher_patch_temperature_scheduler.get_temperature(), dim=-1)
+                    teacher_patch_c = teacher_patch_c.detach().chunk(self.data_global_views_num)
+
+                    total_loss1, n_loss_terms1 = 0, 0
+                    total_loss2, n_loss_terms2 = 0, 0
+                    for q in range(len(teacher_cls_c)):
+                        for v in range(len(student_cls_c)):
+                            if v == q:
+                                loss2 = torch.sum(-teacher_patch_c[q] * F.log_softmax(student_patch_c[v], dim=-1), dim=-1)
+                                mask = masks[v].flatten(-2, -1)
+                                loss2 = torch.sum(loss2 * mask.float(), dim=-1) / mask.sum(dim=-1).clamp(min=1.0)
+                                total_loss2 += loss2.mean()
+                                n_loss_terms2 += 1
+                            else:
+                                loss1 = torch.sum(-teacher_cls_c[q] * F.log_softmax(student_cls_c[v], dim=-1), dim=-1)
+                                total_loss1 += loss1.mean()
+                                n_loss_terms1 += 1
+                        
+                    total_loss1 = total_loss1 / n_loss_terms1 * self.lambda1
+                    total_loss2 = total_loss2 / n_loss_terms2 * self.lambda2
+                    loss = total_loss1 + total_loss2
+
+                    self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+
+                loss_value = loss.item()
+                self.train_loss[-1] += loss_value * images.size(0)
+                num_samples += images.size(0)
+
+                self.lr_values.append(self.lr_scheduler.get_value())
+                self.wd_values.append(self.wd_scheduler.get_value())
+                self.ema_values.append(self.ema_scheduler.get_value())
+                write_on_csv(self.output_folder, epoch, iteration, loss_value, self.lr_values[-1], self.wd_values[-1], self.ema_values[-1])
+
+                self.update_target_network(ema=self.ema_scheduler.get_value())
                 
-                pass
+                self.lr_scheduler.step()
+                self.wd_scheduler.step()
+                self.ema_scheduler.step()
+                self.update_centers(teacher_cls, teacher_patch)
+                self.student_cls_temperature_scheduler.step()
+                self.student_patch_temperature_scheduler.step()
+                self.teacher_cls_temperature_scheduler.step()
+                self.teacher_patch_temperature_scheduler.step()
+            
+            self.train_loss[-1] /= num_samples
+
+            self.save_models(epoch)
+
+            write_on_log(f"Loss: {self.train_loss[-1]}", self.output_folder)
+
+            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
+            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
+            plot_fig(range(len(self.ema_values)), "Iteration", self.ema_values, "EMA", f"ema", self.output_folder)
+            
+            save_json({"train_loss": self.train_loss}, self.output_folder, "training_info")
+
+            save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
+
+            write_on_log("", self.output_folder)
 
     def save_models(self, epoch):
         if not is_main_process():
@@ -369,6 +468,9 @@ class iBOT():
         self.target_encoder.use_checkpoint = False # Target model should not use checkpointing
         self.target_projection_head = copy.deepcopy(self.projection_head)
         self.target_projection_head.use_checkpoint = False # Target projection head should not use checkpointing
+        self.target_encoder.drop_path_rate = 0.0
+        self.target_encoder.masked_im_modeling = False
+        del self.target_encoder.masked_embed
 
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):

@@ -64,6 +64,7 @@ optimization:
     - 1e-6
   num_epochs: 100
   warmup_epochs: 10
+  freeze_prototypes_niters: 313
   optimizer: lars
   temperature: 0.1
   sinkhorn_epsilon: 0.05

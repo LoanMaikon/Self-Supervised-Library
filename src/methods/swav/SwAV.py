@@ -1,7 +1,6 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
-import torch.optim as optim
 import torch.nn as nn
 import numpy as np
 import torch
@@ -39,12 +38,15 @@ class SwAV():
         self._load_optimizer()
         self._load_schedulers()
         self._load_queue()
+        self.use_the_queue = False
 
         self.scaler = torch.amp.GradScaler()
 
         self.train_loss = []
         self.lr_values = []
         self.wd_values = []
+
+        self.global_iteration = 0
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
@@ -55,6 +57,8 @@ class SwAV():
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
             self.load_queue_from_last_epoch()
+
+            self.global_iteration = len(self.lr_values)
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
@@ -89,32 +93,18 @@ class SwAV():
                     emb = nn.functional.normalize(emb, dim=1, p=2)
                     out = self.prototypes(emb)
 
-                    loss = 0
-                    for i, crop_id in enumerate(range(self.data_global_views_num)):
-                        with torch.no_grad():
-                            out_i = out[bs * crop_id : bs * (crop_id + 1)]
-
-                            if epoch >= self.optimization_queue_start_epoch:
-                                proto_w = self.prototypes.module.prototypes.weight if self.world_size > 1 else self.prototypes.prototypes.weight
-                                queue_logits = torch.mm(self.queue[i], proto_w.t())
-                                out_i = torch.cat((queue_logits, out_i), dim=0)
-
-                                self.queue[i, bs:] = self.queue[i, :-bs].clone()
-                                self.queue[i, :bs] = emb[bs * crop_id : bs * (crop_id + 1)]
-
-                            q = sinkhorn(out_i, self.optimization_sinkhorn_epsilon, self.optimization_sinkhorn_iterations, self.world_size)
-                            q = q[-bs:] if epoch >= self.optimization_queue_start_epoch else q
-
-                        subloss = 0
-                        for v in np.delete(np.arange(self.data_global_views_num + self.data_local_views_num), crop_id):
-                            x = out[bs * v : bs * (v + 1)] / self.optimization_temperature
-                            subloss -= torch.mean(torch.sum(q * torch.log_softmax(x, dim=1), dim=1))
-                        loss += subloss / (self.data_global_views_num + self.data_local_views_num - 1)
-                    loss /= self.data_global_views_num
+                loss = self._compute_swav_loss(out, emb, bs, epoch)
 
                 self.scaler.scale(loss).backward()
+
+                # Removing gradient
+                if self.global_iteration < self.optimization_freeze_prototypes_niters:
+                    for param in self.prototypes.parameters():
+                        param.grad = None
+
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
+                self.global_iteration += 1
 
                 loss_value = loss.item()
                 self.train_loss[-1] += loss_value * bs
@@ -142,6 +132,47 @@ class SwAV():
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
             write_on_log("", self.output_folder)
+
+    def _get_prototypes_weight(self):
+        return self.prototypes.module.prototypes.weight if self.world_size > 1 else self.prototypes.prototypes.weight
+
+    def _compute_swav_loss(self, out, emb, bs, epoch):
+        out = out.float()
+        emb = emb.float()
+
+        total_crops = self.data_global_views_num + self.data_local_views_num
+        loss = 0.0
+
+        for i, crop_id in enumerate(range(self.data_global_views_num)):
+            with torch.no_grad():
+                out_i = out[bs * crop_id : bs * (crop_id + 1)]
+
+                if self.optimization_queue_length > 0 and epoch >= self.optimization_queue_start_epoch:
+                    queue_ready = self.use_the_queue or (self.queue.shape[1] > 0 and not torch.all(self.queue[i, -1, :] == 0))
+
+                    if queue_ready:
+                        self.use_the_queue = True
+                        proto_w = self._get_prototypes_weight().detach().float()
+                        queue_logits = torch.mm(self.queue[i], proto_w.t())
+                        out_i = torch.cat((queue_logits, out_i), dim=0)
+
+                    self.queue[i, bs:] = self.queue[i, :-bs].clone()
+                    self.queue[i, :bs] = emb[bs * crop_id : bs * (crop_id + 1)]
+
+                q = sinkhorn(out_i, self.optimization_sinkhorn_epsilon, self.optimization_sinkhorn_iterations, self.world_size)
+                if self.optimization_queue_length > 0 and epoch >= self.optimization_queue_start_epoch:
+                    q = q[-bs:]
+
+            subloss = 0.0
+            for v in np.delete(np.arange(total_crops), crop_id):
+                x = out[bs * v : bs * (v + 1)] / self.optimization_temperature
+                subloss -= torch.mean(torch.sum(q * torch.log_softmax(x, dim=1), dim=1))
+
+            loss += subloss / (total_crops - 1)
+
+        loss /= self.data_global_views_num
+
+        return loss
 
     def save_models(self, epoch):
         if not is_main_process():
@@ -178,17 +209,20 @@ class SwAV():
             torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch_{epoch}.pth"))
 
     def _load_queue(self):
-        self.queue = torch.zeros(self.data_global_views_num, self.optimization_queue_length, self.meta_projection_dim).to(self.device)
+        self.queue = torch.zeros(self.data_global_views_num, self.optimization_queue_length, self.meta_projection_dim, device=self.device)
+        self.use_the_queue = False
 
     def load_queue_from_last_epoch(self):
-        if self.last_epoch < self.optimization_queue_start_epoch:
+        if self.optimization_queue_length <= 0 or self.last_epoch < self.optimization_queue_start_epoch:
             return
 
         queue_path = os.path.join(self.output_folder, "queue", f"queue.pth")
-        if os.path.exists(queue_path):
-            self.queue = torch.load(queue_path, map_location=self.device)
-        else:
+        if not os.path.exists(queue_path):
             raise FileNotFoundError(f"Queue file not found at {queue_path} for loading queue from last epoch.")
+    
+        self.queue = torch.load(queue_path, map_location=self.device)
+        if self.queue.shape[1] > 0 and not torch.all(self.queue[:, -1, :] == 0):
+            self.use_the_queue = True
 
     def _load_schedulers(self):
         self.lr_scheduler = WarmupCosineSchedule(
@@ -382,7 +416,21 @@ class SwAV():
         self.optimization_sinkhorn_epsilon = float(self.config["optimization"]["sinkhorn_epsilon"])
         self.optimization_sinkhorn_iterations = int(self.config["optimization"]["sinkhorn_iterations"])
         self.optimization_num_prototypes = int(self.config["optimization"]["num_prototypes"])
-        self.optimization_queue_length = int(self.config["optimization"]["queue_length"])
         self.optimization_queue_start_epoch = int(self.config["optimization"]["queue_start_epoch"])
+        self.optimization_freeze_prototypes_niters = int(self.config["optimization"].get("freeze_prototypes_niters", 313))
+
+        requested_queue_length = int(self.config["optimization"]["queue_length"])
+        adjusted_global_queue_length = requested_queue_length
+        global_batch_size = self.data_batch_size * self.world_size
+        if adjusted_global_queue_length > 0:
+            adjusted_global_queue_length -= adjusted_global_queue_length % global_batch_size
+        self.optimization_queue_length = adjusted_global_queue_length
+        if self.world_size > 1 and self.optimization_queue_length > 0:
+            self.optimization_queue_length //= self.world_size
+        if requested_queue_length != adjusted_global_queue_length:
+            write_on_log(
+                f"Adjusted queue_length from {requested_queue_length} to {adjusted_global_queue_length} to be divisible by global batch size {global_batch_size}.",
+                self.output_folder
+            )
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

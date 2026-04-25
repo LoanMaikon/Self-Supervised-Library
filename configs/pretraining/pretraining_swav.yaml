@@ -39,7 +39,7 @@ data:
       - 0.456
       - 0.406
     std:
-      - 0.229
+      - 0.228
       - 0.224
       - 0.225
   separate_val_subset:
@@ -64,7 +64,7 @@ optimization:
     - 1e-6
   num_epochs: 100
   warmup_epochs: 10
-  freeze_prototypes_niters: 313
+  freeze_prototypes_niters: 5005
   optimizer: lars
   temperature: 0.1
   sinkhorn_epsilon: 0.05

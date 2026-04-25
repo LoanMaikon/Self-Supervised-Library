@@ -288,7 +288,7 @@ class SwAV():
             v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
             v2.RandomHorizontalFlip() if self.data_global_views_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_global_views_color_jitter else v2.Identity(),
-            v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1) if self.data_global_views_gaussian_blur else v2.Identity(),
+            v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1)], p=0.5) if self.data_global_views_gaussian_blur else v2.Identity(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)
         ])

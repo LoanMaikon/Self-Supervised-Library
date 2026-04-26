@@ -1,6 +1,7 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
+from torch import distributed as dit
 import torch.distributed as dist
 import torch.nn.functional as F
 import torch.optim as optim
@@ -14,8 +15,7 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
 from .models import vit_base, vit_large, vit_small, vit_tiny, projection_head
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearWarmupTemperatureSchedule
-from mask_collator import MaskCollator
-from torch import distributed as dist
+from .mask_collator import MaskCollator
 from src.datasets import datasets
 
 class iBOT():

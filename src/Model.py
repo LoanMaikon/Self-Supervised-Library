@@ -5,6 +5,7 @@ import os
 
 from src.methods.evaluation.Evaluation import Evaluation
 from src.methods.dinov1.DINOv1 import DINOv1
+from src.methods.dinov2.DINOv2 import DINOv2
 from src.methods.simclr.SimCLR import SimCLR
 from src.methods.ijepa.IJEPA import IJEPA
 from src.methods.swav.SwAV import SwAV
@@ -149,6 +150,16 @@ class Model():
                     world_size=self.world_size,
                     continue_training=self.continue_training,
                 )
+            
+            case "dinov2":
+                self.method = DINOv2(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    continue_training=self.continue_training,
+                )
 
             case _:
-                raise ValueError(f"Unsupported mode '{self.mode}'. Supported modes are: evaluate, simclr, byol, ijepa, swav, mae and dinov1.")
+                raise ValueError(f"Unsupported mode '{self.mode}'. Supported modes are: evaluate, simclr, byol, ijepa, swav, mae, dinov1, ibot and dinov2.")

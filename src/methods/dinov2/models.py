@@ -11,7 +11,6 @@
 
 from functools import partial
 import math
-import logging
 from typing import Sequence, Tuple, Union, Callable
 import os
 
@@ -210,7 +209,7 @@ class Block(nn.Module):
             )
         elif self.training and self.sample_drop_ratio > 0.0:
             x = x + self.drop_path1(attn_residual_func(x))
-            x = x + self.drop_path1(ffn_residual_func(x))  # FIXME: drop_path2
+            x = x + self.drop_path2(ffn_residual_func(x))  # FIXME: drop_path2
         else:
             x = x + attn_residual_func(x)
             x = x + ffn_residual_func(x)
@@ -643,6 +642,7 @@ class DinoVisionTransformer(nn.Module):
         interpolate_antialias=False,
         interpolate_offset=0.1,
         channel_adaptive=False,
+        use_checkpoint=False,
     ):
         """
         Args:
@@ -671,6 +671,7 @@ class DinoVisionTransformer(nn.Module):
         """
         super().__init__()
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
+        self.use_checkpoint = use_checkpoint
 
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.num_tokens = 1
@@ -837,7 +838,10 @@ class DinoVisionTransformer(nn.Module):
         x = self.prepare_tokens_with_masks(x, masks)
 
         for blk in self.blocks:
-            x = blk(x)
+            if self.use_checkpoint:
+                x = torch.utils.checkpoint.checkpoint.checkpoint(blk, x)
+            else:
+                x = blk(x)
 
         x_norm = self.norm(x)
         return {
@@ -854,7 +858,10 @@ class DinoVisionTransformer(nn.Module):
         output, total_block_len = [], len(self.blocks)
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
         for i, blk in enumerate(self.blocks):
-            x = blk(x)
+            if self.use_checkpoint:
+                x = torch.utils.checkpoint.checkpoint.checkpoint(blk, x)
+            else:
+                x = blk(x)
             if i in blocks_to_take:
                 output.append(x)
         assert len(output) == len(blocks_to_take), f"only {len(output)} / {len(blocks_to_take)} blocks found"
@@ -867,7 +874,10 @@ class DinoVisionTransformer(nn.Module):
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
         for block_chunk in self.blocks:
             for blk in block_chunk[i:]:  # Passing the nn.Identity()
-                x = blk(x)
+                if self.use_checkpoint:
+                    x = torch.utils.checkpoint.checkpoint.checkpoint(blk, x)
+                else:
+                    x = blk(x)
                 if i in blocks_to_take:
                     output.append(x)
                 i += 1
@@ -927,6 +937,54 @@ class DinoVisionTransformer(nn.Module):
             return ret
         else:
             return self.head(ret["x_norm_clstoken"])
+    
+    def load_weights(self, weight_path, device):
+        checkpoint = torch.load(weight_path, map_location=device)
+
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+
+        errors = []
+        try:
+            self.load_state_dict(clean_state_dict)
+            return
+        except Exception as e:
+            errors.append(("state_dict", str(e)))
+        
+        raise ValueError(
+            f"Failed to load weights from {weight_path}. "
+            f"Tried: {clean_state_dict.keys()}"
+        )
+
+    def freeze(self):
+        for param in self.parameters():
+            param.requires_grad = False
+
+    def unfreeze(self):
+        for param in self.parameters():
+            param.requires_grad = True
+    
+    def get_embed_dim(self):
+        return self.embed_dim
+
+    def get_num_patches(self):
+        return self.patch_embed.num_patches
+
+    def get_features(self, features):
+        return features
+
+    def get_output_dim(self):
+        return self.embed_dim
+
+    def remove_classifier_head(self):
+        self.head = nn.Identity()
+    
+    def eval_forward(self, x):
+        return self.forward(x, is_training=False)
+
+    def get_eval_output_dim(self):
+        return self.embed_dim
 
 def init_weights_vit_timm(module: nn.Module, name: str = ""):
     """ViT weight initialization, original timm impl (for reproducibility)"""
@@ -935,7 +993,7 @@ def init_weights_vit_timm(module: nn.Module, name: str = ""):
         if module.bias is not None:
             nn.init.zeros_(module.bias)
 
-def vit_tiny(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, **kwargs):
+def vit_tiny(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
     model = DinoVisionTransformer(
         patch_size=patch_size,
         embed_dim=192,
@@ -946,11 +1004,11 @@ def vit_tiny(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
-        **kwargs,
+        use_checkpoint=use_checkpoint,
     )
     return model
 
-def vit_small(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, **kwargs):
+def vit_small(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
     model = DinoVisionTransformer(
         patch_size=patch_size,
         embed_dim=384,
@@ -961,12 +1019,12 @@ def vit_small(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
-        **kwargs,
+        use_checkpoint=use_checkpoint,
     )
     return model
 
 
-def vit_base(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, **kwargs):
+def vit_base(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
     model = DinoVisionTransformer(
         patch_size=patch_size,
         embed_dim=768,
@@ -977,12 +1035,12 @@ def vit_base(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
-        **kwargs,
+        use_checkpoint=use_checkpoint,
     )
     return model
 
 
-def vit_large(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, **kwargs):
+def vit_large(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
     model = DinoVisionTransformer(
         patch_size=patch_size,
         embed_dim=1024,
@@ -993,12 +1051,12 @@ def vit_large(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
-        **kwargs,
+        use_checkpoint=use_checkpoint,
     )
     return model
 
 
-def vit_giant2(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, **kwargs):
+def vit_giant2(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
     """
     Close to ViT-giant, with embed-dim 1536 and 24 heads => embed-dim per head 64
     """
@@ -1012,6 +1070,6 @@ def vit_giant2(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptiv
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
-        **kwargs,
+        use_checkpoint=use_checkpoint,
     )
     return model

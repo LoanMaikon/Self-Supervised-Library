@@ -345,7 +345,7 @@ class VisionTransformer(nn.Module):
                 features.append(x)
         
         if self.norm is not None:
-            features = [self.norm(feature) for feature in features]
+            features[-1] = self.norm(features[-1])
         
         avg_features = [self.get_features(feature) for feature in features[-4:]]
         avg_features = torch.cat(avg_features, dim=-1)

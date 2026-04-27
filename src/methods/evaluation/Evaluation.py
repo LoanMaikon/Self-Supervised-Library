@@ -533,7 +533,7 @@ class Evaluation():
 
         __try_load_models()
 
-        if self.meta_framework == "mae":
+        if self.meta_framework in ["mae", "ijepa"]:
             self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes(), batch_norm=True).to(self.device)
         else:
             self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes()).to(self.device)

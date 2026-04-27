@@ -66,6 +66,12 @@ class ResNet50(nn.Module):
 
     def forward(self, x):
         return self._forward_impl_checkpoint(x) if self.use_checkpoint else self._forward_impl(x)
+    
+    def get_eval_output_dim(self):
+        return 2048
+    
+    def eval_forward(self, x):
+        return self._forward_impl_checkpoint(x) if self.use_checkpoint else self._forward_impl(x)
 
 def resnet50(use_checkpoint, pretrained):
     return ResNet50(use_checkpoint, pretrained)

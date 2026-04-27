@@ -157,6 +157,12 @@ class NanoPark(nn.Module):
 
     def remove_classifier_head(self):
         self.fc = nn.Identity()
+    
+    def eval_forward(self, x):
+        return self.forward(x)
+
+    def get_eval_output_dim(self):
+        return self.get_out_features()
 
 def nanopark_large(in_channels=3):
     return NanoPark(in_channels=in_channels, width_multiplier=1.5)

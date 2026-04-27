@@ -327,6 +327,34 @@ class VisionTransformer(nn.Module):
 
         return x # x.shape = (B, N, D)
 
+    def eval_forward(self, x): # Concat last 4 layers
+        x = self.patch_embed(x)
+        B, N, D = x.shape
+
+        pos_embed = self._interpolate_pos_encoding(x, self.pos_embed)
+        x = x + pos_embed
+
+        features = []
+        if not self.checkpoint:
+            for block in self.blocks:
+                x = block(x)
+                features.append(x)
+        else:
+            for block in self.blocks:
+                x = torch.utils.checkpoint.checkpoint(block, x, use_reentrant=False)
+                features.append(x)
+        
+        if self.norm is not None:
+            features = [self.norm(feature) for feature in features]
+        
+        avg_features = [self.get_features(feature) for feature in features[-4:]]
+        avg_features = torch.cat(avg_features, dim=-1)
+
+        return avg_features
+
+    def get_eval_output_dim(self):
+        return self.embed_dim * 4
+
 """
 Predictor main class
 1. Take the output of the encoder and pass it through a few transformer blocks

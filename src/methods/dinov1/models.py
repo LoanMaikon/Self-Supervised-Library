@@ -179,6 +179,12 @@ class VisionTransformer(nn.Module):
 
     def remove_classifier_head(self):
         self.head = nn.Identity()
+    
+    def eval_forward(self, x):
+        return self.forward(x)
+
+    def get_eval_output_dim(self):
+        return self.embed_dim
 
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)

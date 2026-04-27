@@ -3,8 +3,8 @@ mode: evaluate
 data:
   datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 4096 # For each device, so the effective batch size is batch_size * num_devices
-  inference_batch_size: 2048 # For each device, so the effective batch size is inference_batch_size * num_devices
+  batch_size: 1024 # For each device, so the effective batch size is batch_size * num_devices
+  inference_batch_size: 1024 # For each device, so the effective batch size is inference_batch_size * num_devices
   crop_size: 224
   num_workers: 32 # For each device, so the effective number of workers is num_workers * num_devices
   prefetch_factor: 1
@@ -48,13 +48,13 @@ meta:
 optimization:
   ipe_scale: 1.0
   lr:
-  - 1.6
-  - 1.6
-  - 1.6
+  - 0.2
+  - 0.2
+  - 0.2
   weight_decay:
   - 0
   - 0
-  epochs: 90
+  epochs: 80
   warmup_epochs: 0
   optimizer: sgd
   criterion: cross_entropy

@@ -244,8 +244,7 @@ class VisionTransformer(nn.Module):
         if self.fc_norm is not None:
             x[:, 0] = self.fc_norm(x[:, 1:, :].mean(1))
         
-        return_all_tokens = self.return_all_tokens if \
-            return_all_tokens is None else return_all_tokens
+        return_all_tokens = self.return_all_tokens if return_all_tokens is None else return_all_tokens
         if return_all_tokens:
             return x
         return x[:, 0]
@@ -317,6 +316,12 @@ class VisionTransformer(nn.Module):
     def unfreeze(self):
         for param in self.parameters():
             param.requires_grad = True
+    
+    def eval_forward(self, x):
+        return self.forward(x)
+
+    def get_eval_output_dim(self):
+        return self.embed_dim
     
 class iBOTHead(DINOHead):
 

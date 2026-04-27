@@ -207,6 +207,12 @@ class MaskedAutoencoderViT(nn.Module):
         loss = self.forward_loss(imgs, pred, mask)
 
         return loss, pred, mask
+    
+    def eval_forward(self, x):
+        return self.forward(x, mask_ratio=0, return_features=True)
+
+    def get_eval_output_dim(self):
+        return self.cls_token.shape[-1]
 
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)

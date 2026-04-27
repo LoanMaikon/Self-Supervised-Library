@@ -303,6 +303,12 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         return self._forward_impl(x) if not self.use_checkpoint else self._forward_impl_checkpoint(x)
+    
+    def eval_forward(self, x):
+        return self.forward(x)
+
+    def get_eval_output_dim(self):
+        return self.out_dim
 
 class MLPHead(nn.Module):
     def __init__(self, in_dim, hidden_dim=4096, out_dim=256):

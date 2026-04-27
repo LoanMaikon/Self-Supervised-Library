@@ -103,11 +103,9 @@ class Evaluation():
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     if self.meta_mode == "linear_eval":
                         with torch.no_grad():
-                            features = self.encoder(images)
-                            features = self.encoder.get_features(features)
+                            features = self.encoder.eval_forward(images)
                     else:
-                        features = self.encoder(images)
-                        features = self.encoder.get_features(features)
+                        features = self.encoder.eval_forward(images)
                     output = self.linear_head(features)
                     loss = self.apply_criterion(output, labels)
 
@@ -148,8 +146,7 @@ class Evaluation():
                         images = images[0].to(self.device, non_blocking=True)
                         labels = labels.to(self.device, non_blocking=True)
 
-                        features = self.encoder(images)
-                        features = self.encoder.get_features(features)
+                        features = self.encoder.eval_forward(images)
                         output = self.linear_head(features)
 
                         loss = self.apply_criterion(output, labels)
@@ -224,8 +221,7 @@ class Evaluation():
                 images = images[0].to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
-                features = self.encoder(images)
-                features = self.encoder.get_features(features)
+                features = self.encoder.eval_forward(images)
                 output = self.linear_head(features)
 
                 loss = self.apply_criterion(output, labels)
@@ -538,9 +534,9 @@ class Evaluation():
         __try_load_models()
 
         if self.meta_framework == "mae":
-            self.linear_head = LinearHead(self.encoder.get_output_dim(), self.train_dataset.get_num_classes(), batch_norm=True).to(self.device)
+            self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes(), batch_norm=True).to(self.device)
         else:
-            self.linear_head = LinearHead(self.encoder.get_output_dim(), self.train_dataset.get_num_classes()).to(self.device)
+            self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes()).to(self.device)
         self.linear_head.unfreeze()
         
         match self.meta_mode:

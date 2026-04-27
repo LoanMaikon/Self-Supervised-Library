@@ -265,6 +265,12 @@ class ResNet(nn.Module):
             return self._forward_impl(x)
         else:
             return self._forward_impl_checkpoint(x)
+    
+    def eval_forward(self, x):
+        return self.forward(x)
+
+    def get_eval_output_dim(self):
+        return self.out_dim
 
 class ProjectionHead(nn.Module):
     def __init__(self, encoder_out_features, projection_dim):

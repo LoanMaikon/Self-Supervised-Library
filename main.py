@@ -4,11 +4,12 @@ import torch
 import os
 
 from src.utils import is_distributed
-from src.Model import Model
 
 def main():
     args = get_args()
     local_rank, world_size = setup_distributed()
+
+    from src.Model import Model
 
     model = Model(
         config=args.config,
@@ -52,6 +53,9 @@ def get_args():
     return args
 
 def setup_distributed():
+    import torch
+    import torch.distributed as dist
+
     if not is_distributed():
         return 0, 1
 
@@ -66,6 +70,8 @@ def setup_distributed():
     return local_rank, world_size
 
 def cleanup_distributed():
+    import torch.distributed as dist
+
     if dist.is_available() and dist.is_initialized():
         dist.destroy_process_group()
 

@@ -226,8 +226,8 @@ class BYOL():
             dataset_name=self.data_train_dataset,
             separate_val_subset=self.data_separate_val_subset_use,
             val_size=self.data_separate_val_subset_size,
-            transforms=[self.transform],
-            times=[2]
+            transforms=[self.transform1, self.transform2],
+            times=[1, 1]
         )
 
         self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)
@@ -251,11 +251,22 @@ class BYOL():
 
             return v2.Compose([rnd_color_jitter, rnd_gray])
 
-        self.transform = v2.Compose([
+        self.transform1 = v2.Compose([
             v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio),
             v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_color_jitter else v2.Identity(),
-            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5) if self.data_gaussian_blur else v2.Identity(),
+            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.9) if self.data_gaussian_blur else v2.Identity(),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
+        ])
+
+        self.transform2 = v2.Compose([
+            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio),
+            v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
+            __get_color_distortion() if self.data_color_jitter else v2.Identity(),
+            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.1) if self.data_gaussian_blur else v2.Identity(),
+            v2.RandomSolarize(threshold=128, p=0.2) if self.data_color_jitter else v2.Identity(),
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
@@ -327,21 +338,25 @@ class BYOL():
         self.encoder.remove_classifier_head()
         self.target_encoder.remove_classifier_head()
 
+        if self.world_size > 1:
+            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_projection_head)
+            self.encoder_prediction_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_prediction_head)
+            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
+            self.target_encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder_projection_head)
+
+            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            self.encoder_projection_head = DDP(self.encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
+            self.encoder_prediction_head = DDP(self.encoder_prediction_head, device_ids=[self.rank], output_device=self.rank)
+            self.target_encoder = DDP(self.target_encoder, device_ids=[self.rank], output_device=self.rank)
+            self.target_encoder_projection_head = DDP(self.target_encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
+
         self.encoder.unfreeze()
         self.encoder_projection_head.unfreeze()
         self.encoder_prediction_head.unfreeze()
         
         self.target_encoder.freeze()
         self.target_encoder_projection_head.freeze()
-
-        if self.world_size > 1:
-            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
-            self.encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_projection_head)
-            self.encoder_prediction_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_prediction_head)
-
-            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
-            self.encoder_projection_head = DDP(self.encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
-            self.encoder_prediction_head = DDP(self.encoder_prediction_head, device_ids=[self.rank], output_device=self.rank)
         
         self.encoder.train()
         self.encoder_projection_head.train()

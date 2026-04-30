@@ -118,6 +118,40 @@ class EMACosineSchedule(object):
 
         self.actual_value = new_ema
         return new_ema
+    
+class EMALinearSchedule(object):
+    def __init__(self, start_ema, final_ema, T_max):
+        self.start_ema = start_ema
+        self.final_ema = final_ema
+        self.T_max = T_max
+        self._step = 0
+        self.actual_value = start_ema
+
+    def get_value(self):
+        return self.actual_value
+
+    def state_dict(self):
+        return {
+            "_step": self._step,
+            "actual_value": self.actual_value,
+        }
+
+    def load_state_dict(self, state_dict):
+        self._step = state_dict["_step"]
+        self.actual_value = state_dict["actual_value"]
+
+    def step(self):
+        self._step += 1
+        progress = self._step / float(max(1, self.T_max))
+        new_ema = self.start_ema + progress * (self.final_ema - self.start_ema)
+
+        if self.final_ema >= self.start_ema:
+            new_ema = min(self.final_ema, max(self.start_ema, new_ema))
+        else:
+            new_ema = max(self.final_ema, min(self.start_ema, new_ema))
+
+        self.actual_value = new_ema
+        return new_ema
 
 class LinearWarmupTemperatureSchedule(object):
     def __init__(

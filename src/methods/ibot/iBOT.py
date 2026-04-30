@@ -480,11 +480,6 @@ class iBOT():
                 self.target_projection_head.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_projection_head.pth"), map_location=self.device))
             else:
                 raise FileNotFoundError(f"Model checkpoint files not found in {os.path.join(self.output_folder, 'models')}.")
-        
-        self.encoder.unfreeze()
-        self.projection_head.unfreeze()
-        self.target_encoder.freeze()
-        self.target_projection_head.freeze()
 
         self.encoder.to(self.device)
         self.projection_head.to(self.device)
@@ -494,9 +489,17 @@ class iBOT():
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
             self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
+            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
+            self.target_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_projection_head)
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
+            self.target_encoder = DDP(self.target_encoder, device_ids=[self.rank], output_device=self.rank)
+            self.target_projection_head = DDP(self.target_projection_head, device_ids=[self.rank], output_device=self.rank)
         
+        self.encoder.unfreeze()
+        self.projection_head.unfreeze()
+        self.target_encoder.freeze()
+        self.target_projection_head.freeze()
         self.encoder.train()
         self.projection_head.train()
         self.target_encoder.train()

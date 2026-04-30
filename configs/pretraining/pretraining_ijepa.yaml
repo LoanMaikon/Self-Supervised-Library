@@ -5,7 +5,7 @@ data:
   train_dataset: imagenet
   batch_size: 256 # For each device, so the effective batch size is batch_size * num_devices
   crop_size: 224
-  num_workers: 64 # For each device, so the effective number of workers is num_workers * num_devices
+  num_workers: 32 # For each device, so the effective number of workers is num_workers * num_devices
   prefetch_factor: 1
   pin_memory: false
   drop_last: true
@@ -49,7 +49,7 @@ meta:
   predictor_emb_dim: 384
   predictor_num_heads: 12
   pretrained_weights: null # Path to the pretrained weights file. Set to null if you don't want to load pretrained weights.
-  save_every: 0 # Set to 0 if you don't want to save intermediate checkpoints during training
+  save_every: 100 # Set to 0 if you don't want to save intermediate checkpoints during training
 
 optimization:
   ipe_scale: 1.0
@@ -58,12 +58,12 @@ optimization:
   - 1.0
   lr:
   - 0.0001
-  - 0.001
+  - 0.0005
   - 0.000001
   weight_decay:
   - 0.04
   - 0.4
-  epochs: 100
+  epochs: 300
   warmup_epochs: 15
   optimizer: adamw
   criterion: l1_smooth_loss

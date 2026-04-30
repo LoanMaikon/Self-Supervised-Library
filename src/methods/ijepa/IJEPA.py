@@ -11,7 +11,7 @@ import os
 from .models import vit_predictor, vit_tiny, vit_small, vit_base, vit_large, vit_huge, vit_giant, apply_masks
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
     recreate_csv_log, get_last_epoch, load_last_values, repeat_interleave_batch
-from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
+from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMALinearSchedule
 from .mask_collator import MaskCollator
 from src.datasets import datasets
 
@@ -184,7 +184,7 @@ class IJEPA():
             T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
 
-        self.ema_scheduler = EMACosineSchedule(
+        self.ema_scheduler = EMALinearSchedule(
             start_ema=self.optimization_ema[0],
             final_ema=self.optimization_ema[1],
             T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
@@ -335,10 +335,6 @@ class IJEPA():
             else:
                 raise FileNotFoundError("Checkpoint files not found for continuing training.")
 
-        self.encoder.unfreeze()
-        self.predictor.unfreeze()
-        self.target_encoder.freeze()
-
         self.encoder.to(self.device)
         self.predictor.to(self.device)
         self.target_encoder.to(self.device)
@@ -346,10 +342,15 @@ class IJEPA():
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
             self.predictor = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.predictor)
+            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
 
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.predictor = DDP(self.predictor, device_ids=[self.rank], output_device=self.rank)
+            self.target_encoder = DDP(self.target_encoder, device_ids=[self.rank], output_device=self.rank)
 
+        self.encoder.unfreeze()
+        self.predictor.unfreeze()
+        self.target_encoder.freeze()
         self.encoder.train()
         self.predictor.train()
         self.target_encoder.train()

@@ -584,16 +584,6 @@ class Evaluation():
         else:
             self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes()).to(self.device)
         self.linear_head.unfreeze()
-        
-        match self.meta_mode:
-            case "linear_eval":
-                self.encoder.freeze()
-            
-            case "fine_tuning":
-                self.encoder.unfreeze()
-        
-            case _:
-                raise ValueError(f"Unsupported mode: {self.meta_mode}")
             
         self.encoder.remove_classifier_head()
 
@@ -608,11 +598,20 @@ class Evaluation():
         self.linear_head.to(self.device)
 
         if self.world_size > 1:
-            if self.meta_mode == "fine_tuning":
-                self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
-                self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.linear_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.linear_head)
             self.linear_head = DDP(self.linear_head, device_ids=[self.rank], output_device=self.rank)
+        
+        match self.meta_mode:
+            case "linear_eval":
+                self.encoder.freeze()
+            
+            case "fine_tuning":
+                self.encoder.unfreeze()
+        
+            case _:
+                raise ValueError(f"Unsupported mode: {self.meta_mode}")
 
     def _load_transform(self):
         self.train_transform = v2.Compose([

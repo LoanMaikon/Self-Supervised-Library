@@ -45,12 +45,12 @@ meta:
 optimization:
   ipe_scale: 1.0
   lr:
-  - 0.000001
-  - 0.001
+  - 0.00001
+  - 0.00003
   - 0.0
   weight_decay:
   - 0.05
   - 0.05
-  epochs: 100
-  warmup_epochs: 10
+  epochs: 800
+  warmup_epochs: 40
   optimizer: adamw

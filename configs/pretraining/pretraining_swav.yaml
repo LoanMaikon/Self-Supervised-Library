@@ -51,7 +51,7 @@ meta:
   checkpoint: false
   projection_dim: 128
   pretrained_weights: null # Path to the pretrained weights file. Set to null if you don't want to load pretrained weights.
-  save_every: 0 # Set to 0 if you don't want to save intermediate checkpoints during training
+  save_every: 100 # Set to 0 if you don't want to save intermediate checkpoints during training
 
 optimization:
   ipe_scale: 1.0
@@ -62,7 +62,7 @@ optimization:
   weight_decay:
     - 1e-6
     - 1e-6
-  num_epochs: 100
+  num_epochs: 800
   warmup_epochs: 10
   freeze_prototypes_niters: 10010
   optimizer: lars

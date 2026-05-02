@@ -40,7 +40,7 @@ meta:
   model_name: vit_base
   checkpoint: false
   pretrained_weights: null # Path to the pretrained weights file. Set to null if you don't want to load pretrained weights.
-  save_every: 0 # Set to 0 if you don't want to save intermediate checkpoints during training
+  save_every: 100 # Set to 0 if you don't want to save intermediate checkpoints during training
 
 optimization:
   ipe_scale: 1.0

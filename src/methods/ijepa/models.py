@@ -327,7 +327,7 @@ class VisionTransformer(nn.Module):
 
         return x # x.shape = (B, N, D)
 
-    def eval_forward(self, x): # Concat last 4 layers
+    def eval_forward(self, x, concat_last_4_layers=False): # Concat last 4 layers
         x = self.patch_embed(x)
         B, N, D = x.shape
 
@@ -346,14 +346,19 @@ class VisionTransformer(nn.Module):
         
         if self.norm is not None:
             features[-1] = self.norm(features[-1])
-        
+
+        if not concat_last_4_layers:
+            return self.get_features(features[-1])
+
         avg_features = [self.get_features(feature) for feature in features[-4:]]
         avg_features = torch.cat(avg_features, dim=-1)
 
         return avg_features
 
-    def get_eval_output_dim(self):
-        return self.embed_dim * 4
+    def get_eval_output_dim(self, concat_last_4_layers=False):
+        if concat_last_4_layers:
+            return self.embed_dim * 4
+        return self.embed_dim
 
 """
 Predictor main class

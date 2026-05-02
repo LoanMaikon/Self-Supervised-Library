@@ -379,11 +379,11 @@ class ResNet(nn.Module):
         return self.encoder_out_features
 
 class ProjectionHead(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
+    def __init__(self, input_dim, hidden_dim, output_dim, use_bn):
         super(ProjectionHead, self).__init__()
         self.mlp = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
+            nn.BatchNorm1d(hidden_dim) if use_bn else nn.Identity(),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, output_dim),
         )
@@ -451,8 +451,8 @@ class Prototypes(nn.Module):
     def forward(self, x):
         return self.prototypes(x)
     
-def projection_head(input_dim, hidden_dim, output_dim):
-    return ProjectionHead(input_dim, hidden_dim, output_dim)
+def projection_head(input_dim, hidden_dim, output_dim, bn):
+    return ProjectionHead(input_dim, hidden_dim, output_dim, use_bn=bn)
 
 def resnet50(use_checkpoint, **kwargs):
     return ResNet(Bottleneck, [3, 4, 6, 3], use_checkpoint=use_checkpoint, **kwargs)

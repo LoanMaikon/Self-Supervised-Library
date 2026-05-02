@@ -321,7 +321,7 @@ class SwAV():
             case _:
                 raise ValueError(f"Unsupported model name: {self.meta_model_name}")
         
-        self.projection_head = projection_head(self.encoder.get_output_dim(), self.encoder.get_output_dim(), self.meta_projection_dim)
+        self.projection_head = projection_head(self.encoder.get_output_dim(), self.encoder.get_output_dim(), self.meta_projection_dim, bn=self.meta_projection_head_bn)
         self.prototypes = prototypes(self.meta_projection_dim, self.optimization_num_prototypes)
 
         self.encoder.remove_unnecessary_modules()
@@ -403,6 +403,7 @@ class SwAV():
         self.meta_model_name = str(self.config["meta"]["model_name"])
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
         self.meta_projection_dim = int(self.config["meta"]["projection_dim"])
+        self.meta_projection_head_bn = bool(self.config["meta"]["projection_head_bn"])
         self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
         self.meta_save_every = int(self.config["meta"]["save_every"])
 

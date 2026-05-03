@@ -3,7 +3,7 @@ mode: dinov1
 data:
   datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 512 # For each device, so the effective batch size is batch_size * num_devices
+  batch_size: 256 # For each device, so the effective batch size is batch_size * num_devices
   num_workers: 64 # For each device, so the effective number of workers is num_workers * num_devices
   prefetch_factor: 1
   pin_memory: false
@@ -30,7 +30,7 @@ data:
       - 1.3333333333333333
     crop_size: 224
   local_views:
-    num: 4
+    num: 0
     crop_scale:
       - 0.05
       - 0.3
@@ -59,14 +59,14 @@ optimization:
   - 0.996
   - 1.0
   lr:
-  - 0.0001
-  - 0.001
+  - 0.00005
+  - 0.0005 # 0.0005 ∗ batchsize/256
   - 0.000001
   weight_decay:
   - 0.04
   - 0.4
-  epochs: 300
-  warmup_epochs: 10
+  epochs: 100
+  warmup_epochs: 0
   optimizer: adamw
   sinkhorn_epsilon: 0.05
   sinkhorn_iterations: 3
@@ -80,3 +80,5 @@ optimization:
   - 0.07
   tempereature_warmup: 30
   center_momentum: 0.9
+
+# Should get 59.1, Table 9

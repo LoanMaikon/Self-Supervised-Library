@@ -80,14 +80,14 @@ class DINOv1():
                 images = [img.to(self.device, non_blocking=True) for img in images]
 
                 with torch.amp.autocast(device_type=self.device.type):
-                    target_outputs = self.target_encoder(torch.cat(images[:2], dim=0))
+                    target_outputs = self.target_encoder(images[:self.data_global_views_num])
                     target_outputs = self.target_projection_head(target_outputs)
 
-                    student_outputs = self.encoder(torch.cat(images, dim=0))
+                    student_outputs = self.encoder(images)
                     student_outputs = self.projection_head(student_outputs) / self.student_temp_scheduler.get_value()
 
                     student_out = student_outputs.chunk(len(images), dim=0)
-                    teacher_out = F.softmax((target_outputs - self.center) / self.teacher_temp_scheduler.get_value(), dim=-1).detach().chunk(2, dim=0)
+                    teacher_out = F.softmax((target_outputs - self.center) / self.teacher_temp_scheduler.get_value(), dim=-1).detach().chunk(self.data_global_views_num, dim=0)
 
                     total_loss = 0.0
                     n_loss_terms = 0.0
@@ -108,6 +108,10 @@ class DINOv1():
                     num_samples += images[0].size(0)
 
                 self.scaler.scale(total_loss).backward()
+                if self.world_size > 1:
+                    self.projection_head.module.cancel_gradients_last_layer(epoch, self.optimization_freeze_last_layer_epochs)
+                else:
+                    self.projection_head.cancel_gradients_last_layer(epoch, self.optimization_freeze_last_layer_epochs)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
 
@@ -319,7 +323,8 @@ class DINOv1():
         ])
 
         self.global_transform_1 = v2.Compose([
-            v2.RandomResizedCrop(size=self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
+            v2.RandomResizedCrop(size=self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), 
+                                 ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             flip_and_color_jitter,
             v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1, sigma=(0.1, 2.0)),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
@@ -327,7 +332,8 @@ class DINOv1():
         ])
 
         self.global_transform_2 = v2.Compose([
-            v2.RandomResizedCrop(size=self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
+            v2.RandomResizedCrop(size=self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), 
+                                 ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             flip_and_color_jitter,
             v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.1),
             v2.RandomSolarize(p=0.2),
@@ -336,7 +342,8 @@ class DINOv1():
         ])
 
         self.local_transform = v2.Compose([
-            v2.RandomResizedCrop(size=self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio)),
+            v2.RandomResizedCrop(size=self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), 
+                                 ratio=tuple(self.data_local_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             flip_and_color_jitter,
             v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_local_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.5),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
@@ -346,14 +353,17 @@ class DINOv1():
     def _load_models(self):
         match self.meta_model_name:
             case "vit_tiny":
-                self.encoder = vit_tiny(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
+                self.encoder = vit_tiny(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint, drop_path_rate=self.optimization_drop_path_rate)
+                self.target_encoder = vit_tiny(patch_size=self.meta_patch_size)
             case "vit_small":
-                self.encoder = vit_small(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
+                self.encoder = vit_small(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint, drop_path_rate=self.optimization_drop_path_rate)
+                self.target_encoder = vit_small(patch_size=self.meta_patch_size)
             case "vit_base":
-                self.encoder = vit_base(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
-            
+                self.encoder = vit_base(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint, drop_path_rate=self.optimization_drop_path_rate)
+                self.target_encoder = vit_base(patch_size=self.meta_patch_size)
+
         self.projection_head = projection_head(
-            input_dim=self.encoder.embed_dim,
+            in_dim=self.encoder.embed_dim,
             hidden_dim=self.meta_projection_head_hidden_dim,
             bottleneck_dim=self.meta_projection_head_bottleneck_dim,
             output_dim=self.meta_projection_head_output_dim,
@@ -372,10 +382,10 @@ class DINOv1():
             else:
                 raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
         
-        self.target_encoder = copy.deepcopy(self.encoder)
-        self.target_encoder.use_checkpoint = False # Target model should not use checkpointing
         self.target_projection_head = copy.deepcopy(self.projection_head)
         self.target_projection_head.use_checkpoint = False # Target projection head should not use checkpointing
+
+        self.target_encoder.load_state_dict(self.encoder.state_dict())
 
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
@@ -456,5 +466,7 @@ class DINOv1():
         self.optimization_temperature_teacher = list(map(float, self.config["optimization"]["temperature_teacher"]))
         self.optimization_tempereature_warmup = int(self.config["optimization"]["tempereature_warmup"])
         self.optimization_center_momentum = float(self.config["optimization"]["center_momentum"])
+        self.optimization_freeze_last_layer_epochs = int(self.config["optimization"]["freeze_last_layer_epochs"])
+        self.optimization_drop_path_rate = float(self.config["optimization"]["drop_path_rate"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

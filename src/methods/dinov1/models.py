@@ -257,7 +257,7 @@ class VisionTransformer(nn.Module):
 
         return self.pos_drop(x)
 
-    def forward(self, x):
+    def _forward(self, x):
         x = self.prepare_tokens(x)
         for blk in self.blocks:
             if not self.use_checkpoint:
@@ -266,6 +266,24 @@ class VisionTransformer(nn.Module):
                 x = torch.utils.checkpoint.checkpoint(blk, x)
         x = self.norm(x)
         return x[:, 0]
+
+    def forward(self, x):
+        if not isinstance(x, list):
+            x = [x]
+        idx_crops = torch.cumsum(torch.unique_consecutive(
+            torch.tensor([inp.shape[-1] for inp in x]),
+            return_counts=True,
+        )[1], 0)
+        start_idx = 0
+        for end_idx in idx_crops:
+            _x = self._forward(torch.cat(x[start_idx: end_idx]).to(x[0].device))
+            if start_idx == 0:
+                output = _x
+            else:
+                output = torch.cat((output, _x))
+            start_idx = end_idx
+        
+        return output
 
     def get_last_selfattention(self, x):
         x = self.prepare_tokens(x)
@@ -293,30 +311,33 @@ class VisionTransformer(nn.Module):
         return output
 
 
-def vit_tiny(patch_size=16, use_checkpoint=False):
+def vit_tiny(patch_size=16, use_checkpoint=False, drop_path_rate=0.):
     model = VisionTransformer(
         patch_size=patch_size, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4,
-        qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), use_checkpoint=use_checkpoint)
+        qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
     return model
 
 
-def vit_small(patch_size=16, use_checkpoint=False):
+def vit_small(patch_size=16, use_checkpoint=False, drop_path_rate=0.):
     model = VisionTransformer(
         patch_size=patch_size, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4,
-        qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), use_checkpoint=use_checkpoint)
+        qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
     return model
 
 
-def vit_base(patch_size=16, use_checkpoint=False):
+def vit_base(patch_size=16, use_checkpoint=False, drop_path_rate=0.):
     model = VisionTransformer(
         patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
-        qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), use_checkpoint=use_checkpoint)
+        qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
     return model
 
 
 class DINOHead(nn.Module):
     def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256, use_checkpoint=False):
         super().__init__()
+        
+        self.norm_last_layer = norm_last_layer
+
         nlayers = max(nlayers, 1)
         self.use_checkpoint = use_checkpoint
         if nlayers == 1:
@@ -336,7 +357,7 @@ class DINOHead(nn.Module):
         self.apply(self._init_weights)
         self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
         self.last_layer.weight_g.data.fill_(1)
-        if norm_last_layer:
+        if self.norm_last_layer:
             self.last_layer.weight_g.requires_grad = False
 
     def _init_weights(self, m):
@@ -380,7 +401,23 @@ class DINOHead(nn.Module):
     def unfreeze(self):
         for param in self.parameters():
             param.requires_grad = True
+        
+        self.freeze_last_layer()
+    
+    def freeze_last_layer(self):
+        if self.norm_last_layer:
+            self.last_layer.weight_g.requires_grad = False
 
+    def unfreeze_last_layer(self):
+        if self.norm_last_layer:
+            self.last_layer.weight_g.requires_grad = True
+    
+    def cancel_gradients_last_layer(self, epoch, freeze_last_layer_epochs):
+        if epoch > freeze_last_layer_epochs:
+            return
+        for name, p in self.named_parameters():
+            if "last_layer" in name:
+                p.grad = None
 
 def projection_head(in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256, use_checkpoint=False):
     return DINOHead(

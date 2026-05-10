@@ -338,25 +338,21 @@ class BYOL():
         self.encoder.remove_classifier_head()
         self.target_encoder.remove_classifier_head()
 
-        if self.world_size > 1:
-            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
-            self.encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_projection_head)
-            self.encoder_prediction_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_prediction_head)
-            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
-            self.target_encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder_projection_head)
-
-            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
-            self.encoder_projection_head = DDP(self.encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
-            self.encoder_prediction_head = DDP(self.encoder_prediction_head, device_ids=[self.rank], output_device=self.rank)
-            self.target_encoder = DDP(self.target_encoder, device_ids=[self.rank], output_device=self.rank)
-            self.target_encoder_projection_head = DDP(self.target_encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
-
         self.encoder.unfreeze()
         self.encoder_projection_head.unfreeze()
         self.encoder_prediction_head.unfreeze()
         
         self.target_encoder.freeze()
         self.target_encoder_projection_head.freeze()
+
+        if self.world_size > 1:
+            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_projection_head)
+            self.encoder_prediction_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_prediction_head)
+
+            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            self.encoder_projection_head = DDP(self.encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
+            self.encoder_prediction_head = DDP(self.encoder_prediction_head, device_ids=[self.rank], output_device=self.rank)
         
         self.encoder.train()
         self.encoder_projection_head.train()

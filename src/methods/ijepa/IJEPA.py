@@ -339,18 +339,17 @@ class IJEPA():
         self.predictor.to(self.device)
         self.target_encoder.to(self.device)
 
-        if self.world_size > 1:
-            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
-            self.predictor = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.predictor)
-            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
-
-            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
-            self.predictor = DDP(self.predictor, device_ids=[self.rank], output_device=self.rank)
-            self.target_encoder = DDP(self.target_encoder, device_ids=[self.rank], output_device=self.rank)
-
         self.encoder.unfreeze()
         self.predictor.unfreeze()
         self.target_encoder.freeze()
+
+        if self.world_size > 1:
+            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.predictor = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.predictor)
+
+            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            self.predictor = DDP(self.predictor, device_ids=[self.rank], output_device=self.rank)
+
         self.encoder.train()
         self.predictor.train()
         self.target_encoder.train()

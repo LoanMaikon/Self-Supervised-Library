@@ -336,7 +336,7 @@ class DINOv1():
                                  ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             flip_and_color_jitter,
             v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.1),
-            v2.RandomSolarize(p=0.2),
+            v2.RandomSolarize(p=0.2, threshold=128),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=tuple(self.data_normalize_mean), std=tuple(self.data_normalize_std)),
         ])
@@ -366,10 +366,10 @@ class DINOv1():
             in_dim=self.encoder.embed_dim,
             hidden_dim=self.meta_projection_head_hidden_dim,
             bottleneck_dim=self.meta_projection_head_bottleneck_dim,
-            output_dim=self.meta_projection_head_output_dim,
+            out_dim=self.meta_projection_head_output_dim,
             use_bn=self.meta_projection_head_use_bn,
             norm_last_layer=self.meta_projection_head_norm_last_layer,
-            n_layers=self.meta_projection_head_n_layers,
+            nlayers=self.meta_projection_head_n_layers,
             use_checkpoint=self.meta_checkpoint,
         )
 
@@ -382,8 +382,17 @@ class DINOv1():
             else:
                 raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
         
-        self.target_projection_head = copy.deepcopy(self.projection_head)
-        self.target_projection_head.use_checkpoint = False # Target projection head should not use checkpointing
+        self.target_projection_head = projection_head(
+            in_dim=self.encoder.embed_dim,
+            hidden_dim=self.meta_projection_head_hidden_dim,
+            bottleneck_dim=self.meta_projection_head_bottleneck_dim,
+            out_dim=self.meta_projection_head_output_dim,
+            use_bn=self.meta_projection_head_use_bn,
+            norm_last_layer=self.meta_projection_head_norm_last_layer,
+            nlayers=self.meta_projection_head_n_layers,
+            use_checkpoint=False,
+        )
+        self.target_projection_head.load_state_dict(self.projection_head.state_dict())
 
         self.target_encoder.load_state_dict(self.encoder.state_dict())
 
@@ -401,20 +410,17 @@ class DINOv1():
         self.target_encoder.to(self.device)
         self.target_projection_head.to(self.device)
 
-        if self.world_size > 1:
-            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
-            self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
-            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
-            self.target_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_projection_head)
-            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
-            self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
-            self.target_encoder = DDP(self.target_encoder, device_ids=[self.rank], output_device=self.rank)
-            self.target_projection_head = DDP(self.target_projection_head, device_ids=[self.rank], output_device=self.rank)
-        
         self.encoder.unfreeze()
         self.projection_head.unfreeze()
         self.target_encoder.freeze()
         self.target_projection_head.freeze()
+
+        if self.world_size > 1:
+            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
+            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
+        
         self.encoder.train()
         self.projection_head.train()
         self.target_encoder.train()

@@ -76,7 +76,9 @@ class iBOT():
                 continue
 
             write_on_log(f"Epoch {epoch}/{self.optimization_epochs}", self.output_folder)
+
             self.train_sampler.set_epoch(epoch)
+            self.train_dataloader.collate_fn.set_epoch(epoch)
 
             self.train_loss.append(0.0)
             num_samples = 0
@@ -86,26 +88,34 @@ class iBOT():
 
                 images = [img.to(self.device, non_blocking=True) for img in images]
                 masks = [mask.to(self.device, non_blocking=True) for mask in masks]
+                batch_size = images[0].size(0)
 
                 with torch.amp.autocast(device_type=self.device.type):
-                    
-                    # Global Views
-                    teacher_output = self.target_encoder(images[:self.data_global_views_num])
+                    # Global views
+                    global_images = torch.cat(images[:self.data_global_views_num], dim=0)
+                    global_masks = torch.cat(masks[:self.data_global_views_num], dim=0)
+
+                    teacher_output = self.target_encoder(global_images)
                     teacher_output = self.target_projection_head(teacher_output)
 
-                    student_output = self.encoder(images[:self.data_global_views_num], mask=masks[:self.data_global_views_num])
+                    student_output = self.encoder(global_images, mask=global_masks)
                     student_output = self.projection_head(student_output)
 
-                    # Local Views
-                    if self.world_size > 1:
-                        self.encoder.module.backbone.masked_im_modeling = False
-                    else:
-                        self.encoder.backbone.masked_im_modeling = False
-                    student_local_cls = self.encoder(images[self.data_global_views_num:])[0] if len(images) > self.data_global_views_num else None
-                    if self.world_size > 1:
-                        self.encoder.module.backbone.masked_im_modeling = True
-                    else:
-                        self.encoder.backbone.masked_im_modeling = True
+                    # Local views (CLS only)
+                    student_local_cls = None
+                    if len(images) > self.data_global_views_num:
+                        local_images = torch.cat(images[self.data_global_views_num:], dim=0)
+
+                        if self.world_size > 1:
+                            encoder = self.encoder.module
+                        else:
+                            encoder = self.encoder
+                        prev_mim = encoder.masked_im_modeling
+                        encoder.masked_im_modeling = False
+                        local_tokens = self.encoder(local_images)
+                        encoder.masked_im_modeling = prev_mim
+
+                        student_local_cls = self.projection_head(local_tokens)[0]
 
                     # Loss
                     student_cls, student_patch = student_output
@@ -113,43 +123,54 @@ class iBOT():
 
                     if student_local_cls is not None:
                         student_cls = torch.cat([student_cls, student_local_cls])
-                    
-                    student_cls = student_cls / self.student_cls_temperature_scheduler.get_temperature()
+
+                    student_cls = student_cls / self.student_cls_temperature_scheduler.get_value()
                     student_cls_c = student_cls.chunk(self.data_global_views_num + self.data_local_views_num)
-                    student_patch = student_patch / self.student_patch_temperature_scheduler.get_temperature()
+                    student_patch = student_patch / self.student_patch_temperature_scheduler.get_value()
                     student_patch_c = student_patch.chunk(self.data_global_views_num)
 
-                    teacher_cls_c = F.softmax((teacher_cls - self.center_cls) / self.teacher_cls_temperature_scheduler.get_temperature(), dim=-1)
-                    teacher_cls_c = teacher_cls_c.detach().chunk(self.data_global_views_num)
-                    teacher_patch_c = F.softmax((teacher_patch - self.center_patch) / self.teacher_patch_temperature_scheduler.get_temperature(), dim=-1)
-                    teacher_patch_c = teacher_patch_c.detach().chunk(self.data_global_views_num)
+                    teacher_cls_c = F.softmax(
+                        (teacher_cls - self.center_cls) / self.teacher_cls_temperature_scheduler.get_value(),
+                        dim=-1,
+                    ).detach().chunk(self.data_global_views_num)
+                    teacher_patch_c = F.softmax(
+                        (teacher_patch - self.center_patch) / self.teacher_patch_temperature_scheduler.get_value(),
+                        dim=-1,
+                    ).detach().chunk(self.data_global_views_num)
 
                     total_loss1, n_loss_terms1 = 0, 0
                     total_loss2, n_loss_terms2 = 0, 0
                     for q in range(len(teacher_cls_c)):
                         for v in range(len(student_cls_c)):
                             if v == q:
-                                loss2 = torch.sum(-teacher_patch_c[q] * F.log_softmax(student_patch_c[v], dim=-1), dim=-1)
+                                loss2 = torch.sum(
+                                    -teacher_patch_c[q] * F.log_softmax(student_patch_c[v], dim=-1),
+                                    dim=-1,
+                                )
                                 mask = masks[v].flatten(-2, -1)
                                 loss2 = torch.sum(loss2 * mask.float(), dim=-1) / mask.sum(dim=-1).clamp(min=1.0)
                                 total_loss2 += loss2.mean()
                                 n_loss_terms2 += 1
                             else:
-                                loss1 = torch.sum(-teacher_cls_c[q] * F.log_softmax(student_cls_c[v], dim=-1), dim=-1)
+                                loss1 = torch.sum(
+                                    -teacher_cls_c[q] * F.log_softmax(student_cls_c[v], dim=-1),
+                                    dim=-1,
+                                )
                                 total_loss1 += loss1.mean()
                                 n_loss_terms1 += 1
-                        
-                    total_loss1 = total_loss1 / n_loss_terms1 * self.lambda1
-                    total_loss2 = total_loss2 / n_loss_terms2 * self.lambda2
+
+                    total_loss1 = total_loss1 / n_loss_terms1 * self.optimization_lambda1
+                    total_loss2 = total_loss2 / n_loss_terms2 * self.optimization_lambda2
                     loss = total_loss1 + total_loss2
 
                     self.scaler.scale(loss).backward()
+
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
 
                 loss_value = loss.item()
-                self.train_loss[-1] += loss_value * images.size(0)
-                num_samples += images.size(0)
+                self.train_loss[-1] += loss_value * batch_size
+                num_samples += batch_size
 
                 self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())
@@ -157,7 +178,7 @@ class iBOT():
                 write_on_csv(self.output_folder, epoch, iteration, loss_value, self.lr_values[-1], self.wd_values[-1], self.ema_values[-1])
 
                 self.update_target_network(ema=self.ema_scheduler.get_value())
-                
+
                 self.lr_scheduler.step()
                 self.wd_scheduler.step()
                 self.ema_scheduler.step()
@@ -166,20 +187,19 @@ class iBOT():
                 self.student_patch_temperature_scheduler.step()
                 self.teacher_cls_temperature_scheduler.step()
                 self.teacher_patch_temperature_scheduler.step()
-            
+
             self.train_loss[-1] /= num_samples
 
             self.save_models(epoch)
 
             write_on_log(f"Loss: {self.train_loss[-1]}", self.output_folder)
 
-            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
-            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
-            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
-            plot_fig(range(len(self.ema_values)), "Iteration", self.ema_values, "EMA", f"ema", self.output_folder)
-            
-            save_json({"train_loss": self.train_loss}, self.output_folder, "training_info")
+            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", "loss", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", "learning_rate", self.output_folder)
+            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", "weight_decay", self.output_folder)
+            plot_fig(range(len(self.ema_values)), "Iteration", self.ema_values, "EMA", "ema", self.output_folder)
 
+            save_json({"train_loss": self.train_loss}, self.output_folder, "training_info")
             save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
 
             write_on_log("", self.output_folder)
@@ -248,13 +268,15 @@ class iBOT():
     def update_centers(self, teacher_cls, teacher_patch):
         with torch.no_grad():
             cls_center = torch.sum(teacher_cls, dim=0, keepdim=True)
-            dist.all_reduce(cls_center)
-            cls_center = cls_center / (len(teacher_cls) * dist.get_world_size())
+            if self.world_size > 1:
+                dist.all_reduce(cls_center)
+            cls_center = cls_center / (len(teacher_cls) * self.world_size)
             self.center_cls = self.center_cls * self.optimization_center_momentum_cls + cls_center * (1 - self.optimization_center_momentum_cls)
 
             patch_center = torch.sum(teacher_patch.mean(1), dim=0, keepdim=True)
-            dist.all_reduce(patch_center)
-            patch_center = patch_center / (len(teacher_patch) * dist.get_world_size())
+            if self.world_size > 1:
+                dist.all_reduce(patch_center)
+            patch_center = patch_center / (len(teacher_patch) * self.world_size)
             self.center_patch = self.center_patch * self.optimization_center_momentum_patch + patch_center * (1 - self.optimization_center_momentum_patch)
 
     def _load_centers(self):
@@ -362,7 +384,7 @@ class iBOT():
             local_crop_size=self.data_local_views_crop_size,
             pred_ratio=self.meta_mask_ratio,
             pred_ratio_var=self.meta_mask_ratio_var,
-            pred_aspect_ratio=self.meta_mask_ratio_var,
+            pred_aspect_ratio=self.meta_mask_aspect_ratio,
             num_global_crops=self.data_global_views_num,
             num_local_crops=self.data_local_views_num,
         )
@@ -413,7 +435,7 @@ class iBOT():
             v2.RandomHorizontalFlip(p=0.5),
             __get_color_distortion(strength=0.4),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.1),
-            v2.RandomApply([v2.Solarize(threshold=128)], p=0.2),
+            v2.RandomApply([v2.RandomSolarize(threshold=128)], p=0.2),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
@@ -431,15 +453,19 @@ class iBOT():
         match self.meta_model_name:
             case "vit_base":
                 self.encoder = vit_base(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint, drop_path_rate=self.meta_drop_path_rate)
+                self.target_encoder = vit_base(patch_size=self.meta_patch_size, use_checkpoint=False, drop_path_rate=0.0)
 
             case "vit_large":
                 self.encoder = vit_large(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint, drop_path_rate=self.meta_drop_path_rate)
+                self.target_encoder = vit_large(patch_size=self.meta_patch_size, use_checkpoint=False, drop_path_rate=0.0)
 
             case "vit_small":
                 self.encoder = vit_small(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint, drop_path_rate=self.meta_drop_path_rate)
+                self.target_encoder = vit_small(patch_size=self.meta_patch_size, use_checkpoint=False, drop_path_rate=0.0)
 
             case "vit_tiny":
                 self.encoder = vit_tiny(patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint, drop_path_rate=self.meta_drop_path_rate)
+                self.target_encoder = vit_tiny(patch_size=self.meta_patch_size, use_checkpoint=False, drop_path_rate=0.0)
 
             case _:
                 raise ValueError(f"Model {self.meta_model_name} not recognized.")
@@ -451,8 +477,19 @@ class iBOT():
             out_dim=self.meta_projection_head_output_dim,
             use_bn=self.meta_projection_head_use_bn,
             norm_last_layer=self.meta_projection_head_norm_last_layer,
-            n_layers=self.meta_projection_head_n_layers,
+            nlayers=self.meta_projection_head_n_layers,
             use_checkpoint=self.meta_checkpoint,
+        )
+
+        self.target_projection_head = projection_head(
+            in_dim=self.target_encoder.embed_dim,
+            hidden_dim=self.meta_projection_head_hidden_dim,
+            bottleneck_dim=self.meta_projection_head_bottleneck_dim,
+            out_dim=self.meta_projection_head_output_dim,
+            use_bn=self.meta_projection_head_use_bn,
+            norm_last_layer=self.meta_projection_head_norm_last_layer,
+            nlayers=self.meta_projection_head_n_layers,
+            use_checkpoint=False,
         )
 
         if self.meta_pretrained_weights is not None:
@@ -463,14 +500,11 @@ class iBOT():
                 )
             else:
                 raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
-        
-        self.target_encoder = copy.deepcopy(self.encoder)
-        self.target_encoder.use_checkpoint = False # Target model should not use checkpointing
-        self.target_projection_head = copy.deepcopy(self.projection_head)
-        self.target_projection_head.use_checkpoint = False # Target projection head should not use checkpointing
-        self.target_encoder.drop_path_rate = 0.0
+
+        self.target_encoder.load_state_dict(self.encoder.state_dict())
+        self.target_projection_head.load_state_dict(self.projection_head.state_dict())
+
         self.target_encoder.masked_im_modeling = False
-        del self.target_encoder.masked_embed
 
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
@@ -526,7 +560,7 @@ class iBOT():
         self.meta_model_name = str(self.config["meta"]["model_name"])
         self.meta_drop_path_rate = float(self.config["meta"]["drop_path_rate"])
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
-        self.meta_pretrained_weights = str(self.config["meta"]["pretrained_weights"])
+        self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
         self.meta_save_every = int(self.config["meta"]["save_every"])
         self.meta_patch_size = int(self.config["meta"]["patch_size"])
         self.meta_projection_head_hidden_dim = int(self.config["meta"]["projection_head"]["hidden_dim"])
@@ -537,6 +571,7 @@ class iBOT():
         self.meta_projection_head_n_layers = int(self.config["meta"]["projection_head"]["n_layers"])
         self.meta_mask_ratio = list(map(float, self.config["meta"]["mask_ratio"]))
         self.meta_mask_ratio_var = list(map(float, self.config["meta"]["mask_ratio_var"]))
+        self.meta_mask_aspect_ratio = list(map(float, self.config["meta"]["mask_aspect_ratio"]))
 
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
         self.optimization_ema = list(map(float, self.config["optimization"]["ema"]))
@@ -552,5 +587,7 @@ class iBOT():
         self.optimization_tempereature_warmup = int(self.config["optimization"]["tempereature_warmup"])
         self.optimization_center_momentum_cls = float(self.config["optimization"]["center_momentum_cls"])
         self.optimization_center_momentum_patch = float(self.config["optimization"]["center_momentum_patch"])
+        self.optimization_lambda1 = float(self.config["optimization"]["lambda1"])
+        self.optimization_lambda2 = float(self.config["optimization"]["lambda2"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

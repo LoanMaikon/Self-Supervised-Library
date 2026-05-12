@@ -12,6 +12,7 @@ from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, projection_head
 from src.datasets import datasets
 from src.nt_xent import nt_xent
+from .Hochuli import Hochuli
 from src.lars import LARS
 
 class SimCLR():
@@ -252,6 +253,10 @@ class SimCLR():
             
             case "nanopark_tiny":
                 self.encoder = nanopark_tiny(in_channels=3)
+                self.projection_head = projection_head(encoder_out_features=self.encoder.get_out_features(), projection_dim=self.meta_projection_dim)
+            
+            case "hochuli":
+                self.encoder = Hochuli(in_channels=3)
                 self.projection_head = projection_head(encoder_out_features=self.encoder.get_out_features(), projection_dim=self.meta_projection_dim)
 
             case _:

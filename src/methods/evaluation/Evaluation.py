@@ -579,10 +579,7 @@ class Evaluation():
         else: # --continue_training
             __try_load_models(load_weights=False)
 
-        if self.meta_framework in ["mae", "ijepa"]:
-            self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes(), batch_norm=True).to(self.device)
-        else:
-            self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes()).to(self.device)
+        self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes(), batch_norm=self.meta_bn_on_classifier).to(self.device)
         self.linear_head.unfreeze()
             
         self.encoder.remove_classifier_head()
@@ -850,6 +847,7 @@ class Evaluation():
 
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
         self.meta_mode = str(self.config["meta"]["mode"])
+        self.meta_bn_on_classifier = bool(self.config["meta"]["bn_on_classifier"])
         self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
         self.meta_save_every = int(self.config["meta"]["save_every"])
         self.meta_framework = self.config["meta"]["framework"]

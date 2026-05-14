@@ -66,9 +66,13 @@ Note that for Linear Evaluatio and Fine-tuning, when `--continue_training` if pa
 We run some experiments trying to match the official results.
 
 | Method | Epochs | Batch Size | Linear Eval Top-1 Accuracy (%) |
-|:------:|:------:|:--------- :|:------------------------------:|
+|:------:|:------:|:----------:|:------------------------------:|
 | SimCLR | 100    |    512     | 59.37                          |
 | BYOL   | 100    |    512     | 61.42                          |
 | SwAV   | 200    |    256     | 70.90                          |
 
-The executions of the methods and some extra results for different hyperparameter setups are found [here](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library).
+The full training runs and additional experiments with different hyperparameter configurations can be found [here](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library).
+
+These results include training curves and analysis for learning rate, weight decay, exponential moving average (EMA), training loss, linear evaluation accuracy, and other relevant metrics.
+
+Our goal is to provide useful empirical insights that help the community better understand self-supervised learning methods and their often challenging hyperparameter tuning process.

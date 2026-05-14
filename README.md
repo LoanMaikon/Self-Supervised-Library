@@ -47,14 +47,28 @@ You can easily run a linear evaluation or fine-tuning using a config file found 
 nohup torchrun --nproc_per_node=1 main.py --config configs/evaluate/evaluate_simclr.yaml --devices cuda:0 --output_folder ../simclr/linear_evaluation --evaluate_weights ../simclr/models/encoder.pyh &
 ```
 
-## 4. Results
+## 4. Continue Training
+
+For those who have a poor card (like me), you can stop the executions any time and continue from the last checkpoint by attaching `--continue_training` to the commands, as following:
+
+```bash
+nohup torchrun --nproc_per_node=1 main.py --config configs/pretraining/pretraining_simclr.yaml --devices cuda:0 --output_folder ../simclr --continue_training &
+```
+
+```bash
+nohup torchrun --nproc_per_node=1 main.py --config configs/evaluate/evaluate_simclr.yaml --devices cuda:0 --output_folder ../simclr/linear_evaluation --continue_training &
+```
+
+Note that for Linear Evaluatio and Fine-tuning, when `--continue_training` if passed, there is no need for passing `--evaluate_weights` again.
+
+## 5. Results
 
 We run some experiments trying to match the official results.
 
-| Method | Epochs | Linear Eval Top-1 Accuracy (%) |
-|:------:|:------:|:------------------------------:|
-| SimCLR | 100    | 59.37                          |
-| BYOL   | 100    | 61.42                          |
-| SwAV   | 200    | 70.90                          |
+| Method | Epochs | Batch Size | Linear Eval Top-1 Accuracy (%) |
+|:------:|:------:|:--------- :|:------------------------------:|
+| SimCLR | 100    |    512     | 59.37                          |
+| BYOL   | 100    |    512     | 61.42                          |
+| SwAV   | 200    |    256     | 70.90                          |
 
 The executions of the methods and some extra results for different hyperparameter setups are found [here](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library).

@@ -495,7 +495,8 @@ class Evaluation():
                 
                 case "ibot":
                     try:
-                        self.encoder = ibot_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder = ibot_vit_tiny(use_checkpoint=self.meta_checkpoint, patch_size=16, drop_path_rate=0)
+                        self.encoder.masked_im_modeling = False
                         self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ibot_vit_tiny_16"
                         return
@@ -503,7 +504,8 @@ class Evaluation():
                         errors.append(("ibot_vit_tiny_16", str(e)))
                     
                     try:
-                        self.encoder = ibot_vit_small(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder = ibot_vit_small(use_checkpoint=self.meta_checkpoint, patch_size=16, drop_path_rate=0)
+                        self.encoder.masked_im_modeling = False
                         self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ibot_vit_small_16"
                         return
@@ -511,7 +513,8 @@ class Evaluation():
                         errors.append(("ibot_vit_small_16", str(e)))
                     
                     try:
-                        self.encoder = ibot_vit_base(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder = ibot_vit_base(use_checkpoint=self.meta_checkpoint, patch_size=16, drop_path_rate=0)
+                        self.encoder.masked_im_modeling = False
                         self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ibot_vit_base_16"
                         return
@@ -519,7 +522,8 @@ class Evaluation():
                         errors.append(("ibot_vit_base_16", str(e)))
 
                     try:
-                        self.encoder = ibot_vit_large(checkpoint=self.meta_checkpoint, patch_size=16)
+                        self.encoder = ibot_vit_large(use_checkpoint=self.meta_checkpoint, patch_size=16, drop_path_rate=0)
+                        self.encoder.masked_im_modeling = False
                         self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ibot_vit_large_16"
                         return

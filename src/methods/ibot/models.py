@@ -318,7 +318,7 @@ class VisionTransformer(nn.Module):
             param.requires_grad = True
     
     def eval_forward(self, x):
-        return self.forward(x)
+        return self.forward(x, return_all_tokens=False, mask=None)
 
     def get_eval_output_dim(self):
         return self.embed_dim

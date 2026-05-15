@@ -3,9 +3,9 @@ mode: dinov1
 data:
   datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 128 # Using 2 gpus
-  num_workers: 32 # Using 2 gpus
-  prefetch_factor: 2
+  batch_size: 256
+  num_workers: 64
+  prefetch_factor: 1
   pin_memory: false
   drop_last: true
   normalize:

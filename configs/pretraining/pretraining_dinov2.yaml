@@ -1,0 +1,113 @@
+mode: dinov2
+
+data:
+  datasets_path: /home/lmk22/datasets
+  train_dataset: imagenet
+  batch_size: 256
+  num_workers: 64
+  prefetch_factor: 1
+  pin_memory: false
+  drop_last: true
+  normalize:
+    mean:
+      - 0.485
+      - 0.456
+      - 0.406
+    std:
+      - 0.229
+      - 0.224
+      - 0.225
+  separate_val_subset:
+    use: false
+    size: 0.1
+  global_views:
+    num: 2
+    crop_scale:
+      - 0.32
+      - 1.0
+    crop_ratio:
+      - 0.75
+      - 1.3333333333333333
+    crop_size: 224
+  local_views:
+    num: 2
+    crop_scale:
+      - 0.05
+      - 0.32
+    crop_ratio:
+      - 0.75
+      - 1.3333333333333333
+    crop_size: 96
+
+meta:
+  model_name: vit_small
+  drop_path_rate: 0.1
+  checkpoint: false
+  pretrained_weights: null
+  save_every: 0
+  patch_size: 16
+  projection_head_dino:
+    hidden_dim: 2048
+    bottleneck_dim: 256
+    output_dim: 65536
+    use_bn: false
+    norm_last_layer: false
+    n_layers: 3
+  projection_head_ibot:
+    hidden_dim: 2048
+    bottleneck_dim: 256
+    output_dim: 65536
+    use_bn: false
+    norm_last_layer: false
+    n_layers: 3
+  mask_ratio:
+    - 0.1
+    - 0.5
+  mask_ratio_var:
+    - 0.0
+    - 0.0
+  mask_aspect_ratio:
+    - 0.3
+    - 3.33333
+  mask_sample_probability: 0.5
+
+optimization:
+  ipe_scale: 1.0
+  ema:
+    - 0.994
+    - 1.0
+  lr:
+    - 0.00001
+    - 0.0001
+    - 0.000001
+  weight_decay:
+    - 0.04
+    - 0.4
+  epochs: 100
+  warmup_epochs: 10
+  optimizer: adamw
+  temperature_student_patch:
+    - 0.1
+    - 0.1
+    - 0.1
+  temperature_student_cls:
+    - 0.1
+    - 0.1
+    - 0.1
+  temperature_teacher_cls:
+    - 0.04
+    - 0.04
+    - 0.04
+  temperature_teacher_patch:
+    - 0.04
+    - 0.04
+    - 0.04
+  temperature_warmup: 30
+  center_momentum_cls: 0.9
+  center_momentum_patch: 0.9
+  dino_loss_weight: 1.0
+  ibot_loss_weight: 1.0
+  koleo_loss_weight: 0.1
+  freeze_last_layer_epochs: 1
+  sinkhorn_epsilon: 0.05
+  sinkhorn_iterations: 3

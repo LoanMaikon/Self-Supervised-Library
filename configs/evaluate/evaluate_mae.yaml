@@ -49,13 +49,13 @@ meta:
 optimization:
   ipe_scale: 1.0
   lr:
-  - 1.6
-  - 1.6
-  - 1.6
+  - 0.001
+  - 0.1
+  - 0
   weight_decay:
   - 0
   - 0
   epochs: 90
-  warmup_epochs: 0
+  warmup_epochs: 10
   optimizer: sgd
   criterion: cross_entropy

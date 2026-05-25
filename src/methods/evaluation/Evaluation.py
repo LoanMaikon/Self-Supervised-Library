@@ -18,6 +18,7 @@ from src.methods.dinov2.models import vit_tiny as dinov2_vit_tiny, vit_small as 
 from src.methods.mae.models import mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge_patch14, mae_vit_small_patch16, mae_vit_tiny_patch16
 from src.methods.dinov1.models import vit_tiny as dinov1_vit_tiny, vit_small as dinov1_vit_small, vit_base as dinov1_vit_base
 from src.methods.ibot.models import vit_base as ibot_vit_base, vit_large as ibot_vit_large, vit_small as ibot_vit_small, vit_tiny as ibot_vit_tiny
+from src.methods.barlow_twins.models import Model_barlow_twins as barlow_twins_resnet50
 from .resnet50 import resnet50 as resnet50_eval
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
@@ -570,6 +571,15 @@ class Evaluation():
                         return
                     except Exception as e:
                         errors.append(("dinov2_vit_giant_16", str(e)))
+
+                case "barlow_twins":
+                    try:
+                        self.encoder = barlow_twins_resnet50(self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
+                        self.model_type = "barlow_twins_resnet50"
+                        return
+                    except Exception as e:
+                        errors.append(("barlow_twins_resnet50", str(e)))
 
                 case _:
                     errors.append(("unknown_framework", f"Unsupported framework: {self.meta_framework}"))

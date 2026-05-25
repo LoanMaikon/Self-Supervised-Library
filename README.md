@@ -21,6 +21,7 @@ The following self-supervised methods are currently available:
 - I-JEPA
 - iBOT
 - DINOv1
+- Barlow Twins
 
 This library aims to provide:
 
@@ -65,11 +66,11 @@ Note that for Linear Evaluation and Fine-tuning, when `--continue_training` is p
 
 We run some experiments trying to match the official results.
 
-| Method | Epochs | Batch Size | Linear Eval Top-1 Accuracy (%) |
-|:------:|:------:|:----------:|:------------------------------:|
-| SimCLR | 100    |    512     | 59.37                          |
-| BYOL   | 100    |    512     | 61.42                          |
-| SwAV   | 200    |    256     | 70.90                          |
+| Method | Model     | Epochs | Batch Size | Linear Evaluation Top-1 Accuracy (%) |
+|--------|-----------|--------|------------|--------------------------------------|
+| SimCLR | ResNet-50 | 100    | 512        | 59.37                                |
+| BYOL   | ResNet-50 | 100    | 512        | 61.42                                |
+| SwAV   | ResNet-50 | 200    | 256        | 70.90                                |
 
 The full training runs and additional experiments with different hyperparameter configurations can be found [here](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library).
 

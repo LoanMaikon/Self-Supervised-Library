@@ -3,13 +3,14 @@ import math
 # Code from https://github.com/facebookresearch/ijepa/blob/main/src/utils/schedulers.py with some modifications
 
 class WarmupCosineSchedule(object):
-    def __init__(self, optimizer, warmup_steps, start_lr, middle_lr, final_lr, T_max):
+    def __init__(self, optimizer, warmup_steps, start_lr, middle_lr, final_lr, T_max, param_group_filter=None):
         self.optimizer = optimizer
         self.start_lr = start_lr
         self.middle_lr = middle_lr
         self.final_lr = final_lr
         self.warmup_steps = warmup_steps
         self.T_max = T_max - warmup_steps
+        self.param_group_filter = param_group_filter
 
         self._step = 0
         self.actual_value = start_lr
@@ -41,7 +42,8 @@ class WarmupCosineSchedule(object):
             )
 
         for group in self.optimizer.param_groups:
-            group["lr"] = new_lr
+            if self.param_group_filter is None or self.param_group_filter(group):
+                group["lr"] = new_lr
 
         self.actual_value = new_lr
         return new_lr

@@ -574,7 +574,7 @@ class Evaluation():
 
                 case "barlow_twins":
                     try:
-                        self.encoder = barlow_twins_resnet50(self.meta_checkpoint)
+                        self.encoder = barlow_twins_resnet50(use_checkpoint=self.meta_checkpoint)
                         self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "barlow_twins_resnet50"
                         return

@@ -262,7 +262,7 @@ class BarlowTwins():
     def _load_models(self):
         match self.meta_model_name:
             case "resnet50":
-                self.model = Model_barlow_twins(projection_head_dims=self.meta_projector, batch_size=self.data_batch_size, world_size=self.world_size, lambd=self.optimization_lambda)
+                self.model = Model_barlow_twins(projection_head_dims=self.meta_projector, batch_size=self.data_batch_size, world_size=self.world_size, lambd=self.optimization_lambda, use_checkpoint=self.meta_checkpoint)
             case _:
                 raise ValueError(f"Unsupported model name: {self.meta_model_name}")
         

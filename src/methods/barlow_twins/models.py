@@ -11,18 +11,19 @@ def off_diagonal(x):
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 class Model_barlow_twins(nn.Module):
-    def __init__(self, projection_head_dims, batch_size, world_size, lambd):
+    def __init__(self, projection_head_dims=None, batch_size=None, world_size=None, lambd=None, use_checkpoint=False):
         super().__init__()
 
         self.batch_size = batch_size
         self.world_size = world_size
         self.lambd = lambd
+        self.use_checkpoint = use_checkpoint
 
         self.backbone = torchvision.models.resnet50(zero_init_residual=True)
         self.backbone.fc = nn.Identity()
 
         # projector
-        sizes = [2048] + projection_head_dims
+        sizes = [2048] + projection_head_dims if projection_head_dims is not None else [2048, 8192, 8192, 8192] # Adjust this in evaluation if you change the default
         layers = []
         for i in range(len(sizes) - 2):
             layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
@@ -37,8 +38,14 @@ class Model_barlow_twins(nn.Module):
         self.backbone_out_features = 2048
 
     def forward(self, y1, y2):
-        z1 = self.projector(self.backbone(y1))
-        z2 = self.projector(self.backbone(y2))
+        if not self.use_checkpoint:
+            z1 = self.projector(self.backbone(y1))
+            z2 = self.projector(self.backbone(y2))
+        else:
+            z1 = torch.utils.checkpoint.checkpoint(self.backbone, y1)
+            z1 = torch.utils.checkpoint.checkpoint(self.projector, z1)
+            z2 = torch.utils.checkpoint.checkpoint(self.backbone, y2)
+            z2 = torch.utils.checkpoint.checkpoint(self.projector, z2)
 
         # empirical cross-correlation matrix
         c = self.bn(z1).T @ self.bn(z2)
@@ -70,7 +77,7 @@ class Model_barlow_twins(nn.Module):
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)
 
-        checkpoint = torch.load(weight_path, map_location=device)
+        print(checkpoint.keys())
 
         state_dict = checkpoint
         if isinstance(checkpoint, dict):

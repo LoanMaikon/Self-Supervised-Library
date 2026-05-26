@@ -36,6 +36,9 @@ def is_main_process():
     return int(os.environ.get("RANK", "0")) == 0
 
 def plot_fig(x, x_name, y, y_name, fig_name, output_path):
+    if not is_main_process():
+        return
+
     plt.figure()
     plt.plot(x, y)
     plt.xlabel(x_name)
@@ -48,9 +51,11 @@ def plot_fig(x, x_name, y, y_name, fig_name, output_path):
     plt.close()
 
 def save_json(data, output_path, file_name):
-    if is_main_process():
-        with open(os.path.join(output_path, f"{file_name}.json"), "w") as f:
-            json.dump(data, f, indent=4)
+    if not is_main_process():
+        return
+
+    with open(os.path.join(output_path, f"{file_name}.json"), "w") as f:
+        json.dump(data, f, indent=4)
 
 def concat_all_gather(tensor):
     if not dist.is_available() or not dist.is_initialized():

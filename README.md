@@ -22,6 +22,7 @@ The following self-supervised methods are currently available:
 - iBOT
 - DINOv1
 - Barlow Twins
+- VICReg
 
 This library aims to provide:
 

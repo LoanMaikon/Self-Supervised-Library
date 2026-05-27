@@ -940,10 +940,73 @@ class DinoVisionTransformer(nn.Module):
     
     def load_weights(self, weight_path, device):
         checkpoint = torch.load(weight_path, map_location=device)
-
         state_dict = checkpoint.get("state_dict", checkpoint)
-        
-        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+        clean_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+
+        def _remap_chunked_blocks(sd):
+            if not self.chunked_blocks:
+                return sd
+
+            has_chunked = any(k.startswith("blocks.0.0.") for k in sd.keys())
+            has_unchunked = any(k.startswith("blocks.0.") and not k.startswith("blocks.0.0.") for k in sd.keys())
+            if not has_unchunked or has_chunked:
+                return sd
+
+            block_to_chunk = {}
+            for chunk_idx, block_chunk in enumerate(self.blocks):
+                for block_idx, block in enumerate(block_chunk):
+                    if any(True for _ in block.parameters()):
+                        block_to_chunk[block_idx] = chunk_idx
+
+            remapped = {}
+            for key, value in sd.items():
+                if key.startswith("blocks."):
+                    parts = key.split(".")
+                    if len(parts) > 2 and parts[1].isdigit():
+                        block_idx = int(parts[1])
+                        chunk_idx = block_to_chunk.get(block_idx, 0)
+                        new_key = ".".join(["blocks", str(chunk_idx), str(block_idx)] + parts[2:])
+                        remapped[new_key] = value
+                        continue
+                remapped[key] = value
+            return remapped
+
+        def _resize_pos_embed_if_needed(sd):
+            if "pos_embed" not in sd:
+                return sd
+
+            pos_embed = sd["pos_embed"]
+            if pos_embed.shape == self.pos_embed.shape:
+                print("pos_embed shape matches, no interpolation needed")
+                return sd
+
+            cls_pos = pos_embed[:, :1]
+            patch_pos = pos_embed[:, 1:]
+            embed_dim = patch_pos.shape[-1]
+            old_size = int(math.sqrt(patch_pos.shape[1]))
+            new_size = int(math.sqrt(self.patch_embed.num_patches))
+
+            if old_size * old_size != patch_pos.shape[1] or new_size * new_size != self.patch_embed.num_patches:
+                return sd
+
+            orig_dtype = patch_pos.dtype
+            patch_pos = patch_pos.float()
+            cls_pos = cls_pos.float()
+
+            patch_pos = patch_pos.reshape(1, old_size, old_size, embed_dim).permute(0, 3, 1, 2)
+            patch_pos = F.interpolate(
+                patch_pos,
+                size=(new_size, new_size),
+                mode="bicubic",
+                antialias=self.interpolate_antialias,
+            )
+            patch_pos = patch_pos.permute(0, 2, 3, 1).reshape(1, new_size * new_size, embed_dim)
+
+            sd["pos_embed"] = torch.cat((cls_pos, patch_pos), dim=1).to(orig_dtype)
+            return sd
+
+        clean_state_dict = _remap_chunked_blocks(clean_state_dict)
+        clean_state_dict = _resize_pos_embed_if_needed(clean_state_dict)
 
         errors = []
         try:
@@ -951,7 +1014,7 @@ class DinoVisionTransformer(nn.Module):
             return
         except Exception as e:
             errors.append(("state_dict", str(e)))
-        
+
         raise ValueError(
             f"Failed to load weights from {weight_path}. "
             f"Tried: {clean_state_dict.keys()}"
@@ -1000,6 +1063,7 @@ def vit_tiny(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=
         depth=12,
         num_heads=3,
         mlp_ratio=4,
+        init_values=1e-5,
         block_fn=partial(NestedTensorBlock, attn_class=MemEffAttention),
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
@@ -1015,6 +1079,7 @@ def vit_small(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive
         depth=12,
         num_heads=6,
         mlp_ratio=4,
+        init_values=1e-5,
         block_fn=partial(NestedTensorBlock, attn_class=MemEffAttention),
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
@@ -1031,6 +1096,7 @@ def vit_base(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=
         depth=12,
         num_heads=12,
         mlp_ratio=4,
+        init_values=1e-5,
         block_fn=partial(NestedTensorBlock, attn_class=MemEffAttention),
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
@@ -1047,6 +1113,7 @@ def vit_large(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive
         depth=24,
         num_heads=16,
         mlp_ratio=4,
+        init_values=1e-5,
         block_fn=partial(NestedTensorBlock, attn_class=MemEffAttention),
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,
@@ -1066,6 +1133,7 @@ def vit_giant2(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptiv
         depth=40,
         num_heads=24,
         mlp_ratio=4,
+        init_values=1e-5,
         block_fn=partial(NestedTensorBlock, attn_class=MemEffAttention),
         num_register_tokens=num_register_tokens,
         in_chans=in_chans,

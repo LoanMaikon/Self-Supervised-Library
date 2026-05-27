@@ -65,13 +65,40 @@ Note that for Linear Evaluation and Fine-tuning, when `--continue_training` is p
 
 ## 5. Results
 
-We run some experiments trying to match the official results.
+We conducted several experiments to reproduce the official results and evaluate different hyperparameter settings.
 
-| Method | Model     | Epochs | Batch Size | Linear Evaluation Top-1 Accuracy (%) |
-|--------|-----------|--------|------------|--------------------------------------|
-| SimCLR | ResNet-50 | 100    | 512        | 59.37                                |
-| BYOL   | ResNet-50 | 100    | 512        | 61.42                                |
-| SwAV   | ResNet-50 | 200    | 256        | 70.90                                |
+### SimCLR
+
+| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | LR (init / max / final) | Weight Decay | Temperature | Notes |
+|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|
+| ResNet-50 | 100 (10) | 59.37 | 512 | 1e-5 / 0.6 / 0 | 1e-6 | 0.1 | - |
+
+### BYOL
+
+| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | LR (init / max / final) | Weight Decay | EMA (init / final) | Notes |
+|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|
+| ResNet-50 | 100 (10) | 61.42 | 512 | 1e-4 / 0.4 / 0 | 1e-6 | 0.9995 / 1.0 | Scheduler configured for 1000 epochs,<br>but training stopped at 100 epochs. |
+| ResNet-50 | 100 (10) | 57.93 | 512 | 1e-4 / 0.4 / 0 | 1e-6 | 0.996 / 1.0 | - |
+
+### SwAV
+
+| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | Global / Local Views | LR (init / max / final) | Weight Decay | Temperature | Notes |
+|:---:|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|
+| ResNet-50 | 200 (0) | 70.90 | 256 | 2 / 4 | 1e-5 / 0.6 / 6e-4 | 1e-6 | 0.1 | Queue length of 3840 starting at epoch 15.<br>Prototype freezing for 5005 iterations. |
+
+### DINO
+
+| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | Global / Local Views | LR (init / max / final) | Weight Decay (init / final) | EMA (init / final) | Teacher Temp. (init / max / final) (Warmup) | Notes |
+|:---:|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|:---|
+| ViT-S | 100 (0) | 59.52 | 256 | 2 / 0 | 5e-5 / 5e-4 / 1e-6 | 0.04 / 0.4 | 0.9995 / 1.0 | 0.04 / 0.07 / 0.07 (30) | - |
+| ViT-S | 100 (0) | 67.18 | 256 | 2 / 2 | 5e-5 / 5e-4 / 1e-6 | 0.04 / 0.4 | 0.9995 / 1.0 | 0.04 / 0.04 / 0.04 (0) | - |
+
+### iBOT
+
+| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | Global / Local Views | LR (init / max / final) | Weight Decay (init / final) | EMA (init / final) | Teacher Temp. CLS (init / max / final) (Warmup) | Teacher Temp. Patch (init / max / final) (Warmup) | Notes |
+|:---:|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|:---|:---|
+| ViT-S | 100 (10) | 71.94 | 256 | 2 / 2 | 5e-5 / 5e-4 / 1e-6 | 0.04 / 0.4 | 0.996 / 1.0 | 0.04 / 0.07 / 0.07 (30) | 0.04 / 0.07 / 0.07 (30) | - |
+
 
 The full training runs and additional experiments with different hyperparameter configurations can be found [here](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library).
 

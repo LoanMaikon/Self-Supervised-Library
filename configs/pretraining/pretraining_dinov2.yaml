@@ -41,7 +41,7 @@ data:
 
 meta:
   model_name: vit_small
-  drop_path_rate: 0.1
+  drop_path_rate: 0.1 # Original uses 0.3
   checkpoint: false
   pretrained_weights: null
   save_every: 0

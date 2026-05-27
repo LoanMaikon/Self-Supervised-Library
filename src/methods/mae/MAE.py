@@ -211,7 +211,7 @@ class MAE():
 
     def _load_transform(self):
         self.transform = v2.Compose([
-            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_random_resized_crop_scale, ratio=self.data_random_resized_crop_ratio) if self.data_random_resized_crop_use else v2.Resize((self.data_crop_size, self.data_crop_size)),
+            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_random_resized_crop_scale, ratio=self.data_random_resized_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC) if self.data_random_resized_crop_use else v2.Resize(self.data_crop_size, self.data_crop_size, interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=self.data_random_horizontal_flip_p) if self.data_random_horizontal_flip_use else v2.Lambda(lambda x: x),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)

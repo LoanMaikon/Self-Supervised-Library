@@ -224,7 +224,7 @@ class SimCLR():
             return v2.Compose([rnd_color_jitter, rnd_gray])
 
         self.transform = v2.Compose([
-            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio),
+            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_color_jitter else v2.Identity(),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5) if self.data_gaussian_blur else v2.Identity(),

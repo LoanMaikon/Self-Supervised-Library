@@ -415,14 +415,14 @@ class iBOT():
     def _load_transform(self):
         # Pseudo code of Apendix A from SimCLR paper
         def __get_color_distortion(strength=1.0):
-            collor_jitter = v2.ColorJitter(0.4 * strength, 0.4 * strength, 0.4 * strength, 0.1 * strength)
+            collor_jitter = v2.ColorJitter(0.4 * strength, 0.4 * strength, 0.2 * strength, 0.1 * strength)
             rnd_color_jitter = v2.RandomApply([collor_jitter], p=0.8)
             rnd_gray = v2.RandomGrayscale(p=0.2)
 
             return v2.Compose([rnd_color_jitter, rnd_gray])
     
         self.global_transform_1 = v2.Compose([
-            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
+            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
             __get_color_distortion(strength=1.0),
             v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0)),
@@ -431,7 +431,7 @@ class iBOT():
         ])
 
         self.global_transform_2 = v2.Compose([
-            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
+            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
             __get_color_distortion(strength=0.4),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.1),
@@ -441,7 +441,7 @@ class iBOT():
         ])
 
         self.local_transform = v2.Compose([
-            v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio)),
+            v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
             __get_color_distortion(strength=0.4),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5),

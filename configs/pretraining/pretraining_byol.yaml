@@ -18,6 +18,7 @@ data:
   color_jitter: true
   gaussian_blur: true
   horizontal_flip: true
+  solarization: true
   normalize:
     mean:
       - 0.485

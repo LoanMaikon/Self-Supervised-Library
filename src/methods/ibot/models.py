@@ -324,7 +324,6 @@ class VisionTransformer(nn.Module):
         return self.embed_dim
     
 class iBOTHead(DINOHead):
-
     def __init__(self, *args, patch_out_dim=8192, nlayers=3, hidden_dim=2048, bottleneck_dim=256, 
                  norm_last_layer=True, shared_head=False, **kwargs):
         

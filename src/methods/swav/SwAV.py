@@ -285,7 +285,7 @@ class SwAV():
             return v2.Compose([rnd_color_jitter, rnd_gray])
         
         self.global_transform = v2.Compose([
-            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
+            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip() if self.data_global_views_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_global_views_color_jitter else v2.Identity(),
             v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1)], p=0.5) if self.data_global_views_gaussian_blur else v2.Identity(),
@@ -294,7 +294,7 @@ class SwAV():
         ])
 
         self.local_transform = v2.Compose([
-            v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio)),
+            v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip() if self.data_local_views_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_local_views_color_jitter else v2.Identity(),
             v2.GaussianBlur(kernel_size=int(0.1 * self.data_local_views_crop_size) * 2 + 1) if self.data_local_views_gaussian_blur else v2.Identity(),

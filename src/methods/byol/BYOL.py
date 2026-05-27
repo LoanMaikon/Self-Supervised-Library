@@ -252,21 +252,22 @@ class BYOL():
             return v2.Compose([rnd_color_jitter, rnd_gray])
 
         self.transform1 = v2.Compose([
-            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio),
+            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_color_jitter else v2.Identity(),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.9) if self.data_gaussian_blur else v2.Identity(),
+            v2.RandomSolarize(threshold=128, p=0) if self.data_solarization else v2.Identity(),
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
 
         self.transform2 = v2.Compose([
-            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio),
+            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_color_jitter else v2.Identity(),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.1) if self.data_gaussian_blur else v2.Identity(),
-            v2.RandomSolarize(threshold=128, p=0.2) if self.data_color_jitter else v2.Identity(),
+            v2.RandomSolarize(threshold=128, p=0.2) if self.data_solarization else v2.Identity(),
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
@@ -374,6 +375,7 @@ class BYOL():
         self.data_color_jitter = bool(self.config["data"]["color_jitter"])
         self.data_gaussian_blur = bool(self.config["data"]["gaussian_blur"])
         self.data_horizontal_flip = bool(self.config["data"]["horizontal_flip"])
+        self.data_solarization = bool(self.config["data"]["solarization"])
         self.data_normalize_mean = list(map(float, self.config["data"]["normalize"]["mean"]))
         self.data_normalize_std = list(map(float, self.config["data"]["normalize"]["std"]))
         self.data_separate_val_subset_use = bool(self.config["data"]["separate_val_subset"]["use"])

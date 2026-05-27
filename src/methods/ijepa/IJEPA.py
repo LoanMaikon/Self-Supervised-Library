@@ -287,7 +287,7 @@ class IJEPA():
 
     def _load_transform(self):
         self.transform = v2.Compose([
-            v2.RandomResizedCrop(size=self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio),
+            v2.RandomResizedCrop(size=self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)
         ])

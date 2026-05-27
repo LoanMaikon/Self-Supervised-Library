@@ -1056,7 +1056,7 @@ def init_weights_vit_timm(module: nn.Module, name: str = ""):
         if module.bias is not None:
             nn.init.zeros_(module.bias)
 
-def vit_tiny(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
+def vit_tiny(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False, drop_path_rate=0.0):
     model = DinoVisionTransformer(
         patch_size=patch_size,
         embed_dim=192,
@@ -1069,10 +1069,11 @@ def vit_tiny(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
         use_checkpoint=use_checkpoint,
+        drop_path_rate=drop_path_rate,
     )
     return model
 
-def vit_small(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
+def vit_small(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False, drop_path_rate=0.0):
     model = DinoVisionTransformer(
         patch_size=patch_size,
         embed_dim=384,
@@ -1085,11 +1086,12 @@ def vit_small(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
         use_checkpoint=use_checkpoint,
+        drop_path_rate=drop_path_rate,
     )
     return model
 
 
-def vit_base(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
+def vit_base(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False, drop_path_rate=0.0):
     model = DinoVisionTransformer(
         patch_size=patch_size,
         embed_dim=768,
@@ -1102,11 +1104,12 @@ def vit_base(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
         use_checkpoint=use_checkpoint,
+        drop_path_rate=drop_path_rate,
     )
     return model
 
 
-def vit_large(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
+def vit_large(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False, drop_path_rate=0.0):
     model = DinoVisionTransformer(
         patch_size=patch_size,
         embed_dim=1024,
@@ -1119,11 +1122,12 @@ def vit_large(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
         use_checkpoint=use_checkpoint,
+        drop_path_rate=drop_path_rate,
     )
     return model
 
 
-def vit_giant2(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False):
+def vit_giant2(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptive=False, use_checkpoint=False, drop_path_rate=0.0):
     """
     Close to ViT-giant, with embed-dim 1536 and 24 heads => embed-dim per head 64
     """
@@ -1139,5 +1143,6 @@ def vit_giant2(patch_size=16, num_register_tokens=0, in_chans=3, channel_adaptiv
         in_chans=in_chans,
         channel_adaptive=channel_adaptive,
         use_checkpoint=use_checkpoint,
+        drop_path_rate=drop_path_rate,
     )
     return model

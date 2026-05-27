@@ -349,42 +349,6 @@ class Evaluation():
                     case _:
                         raise ValueError(f"Unknown evaluate_weights: {self.evaluate_weights}")
 
-            elif self.evaluate_weights == "random_resnet50":
-                self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=False)
-                self.model_type = "random_resnet50"
-                return
-            elif self.evaluate_weights == "dinov2_vits14":
-                self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-                self.model_type = "dinov2_vits14"
-                return
-            elif self.evaluate_weights == "dinov2_vitb14":
-                self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')
-                self.model_type = "dinov2_vitb14"
-                return
-            elif self.evaluate_weights == "dinov2_vitl14":
-                self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
-                self.model_type = "dinov2_vitl14"
-                return
-            elif self.evaluate_weights == "dinov2_vitg14":
-                self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitg14')
-                self.model_type = "dinov2_vitg14"
-                return
-            elif self.evaluate_weights == "dinov2_vits14_reg":
-                self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg')
-                self.model_type = "dinov2_vits14_reg"
-                return
-            elif self.evaluate_weights == "dinov2_vitb14_reg":
-                self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg')
-                self.model_type = "dinov2_vitb14_reg"
-                return
-            elif self.evaluate_weights == "dinov2_vitl14_reg":
-                self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14_reg')
-                self.model_type = "dinov2_vitl14_reg"
-                return
-            elif self.evaluate_weights == "dinov2_vitg14_reg":
-                self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitg14_reg')
-                self.model_type = "dinov2_vitg14_reg"
-
             match self.meta_framework:
                 case "simclr":
                     try:

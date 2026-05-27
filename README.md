@@ -4,8 +4,6 @@
 
 This is the repository containing the source code and documentation for my personal project **Self-supervised Library**.
 
-A modular PyTorch-based library for experimenting with and benchmarking self-supervised learning methods on computer vision tasks.
-
 </div>
 
 ---
@@ -41,6 +39,8 @@ Here you can run any method using a config file found at `configs/pretraining`. 
 nohup torchrun --nproc_per_node=1 main.py --config configs/pretraining/pretraining_simclr.yaml --devices cuda:0 --output_folder ../simclr &
 ```
 
+---
+
 ## 3. Linear Evaluation and Fine-tuning
 
 You can easily run a linear evaluation or fine-tuning using a config file found at `configs/evaluate`. For instance, the following command runs a SimCLR linear evaluation in a single GPU <cuda:0> using the encoder trained previously. The output is set to `../simclr/linear_evaluation`
@@ -48,6 +48,8 @@ You can easily run a linear evaluation or fine-tuning using a config file found 
 ```bash
 nohup torchrun --nproc_per_node=1 main.py --config configs/evaluate/evaluate_simclr.yaml --devices cuda:0 --output_folder ../simclr/linear_evaluation --evaluate_weights ../simclr/models/encoder.pyh &
 ```
+
+---
 
 ## 4. Continue Training
 
@@ -63,7 +65,21 @@ nohup torchrun --nproc_per_node=1 main.py --config configs/evaluate/evaluate_sim
 
 Note that for Linear Evaluation and Fine-tuning, when `--continue_training` is passed, there is no need for passing `--evaluate_weights` again.
 
-## 5. Results
+---
+
+## 5. Evaluate Original Weights
+
+This library also allows you to evaluate the original weights provided by the authors. For instance, the following command runs a SwAV linear evaluation in a single GPU <cuda:0> using the original encoder weights. The output is set to `../swav_original`.
+
+```bash
+nohup torchrun --nproc_per_node=1 main.py --config configs/evaluate/evaluate_swav.yaml --devices cuda:0 --output_folder ../swav_original --evaluate_weights /original/swav/model/ &
+```
+
+This also allows you to experiment original models with custom datasets.
+
+---
+
+## 6. Results
 
 We conducted several experiments to reproduce the official results and evaluate different hyperparameter settings.
 

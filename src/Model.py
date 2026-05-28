@@ -66,10 +66,8 @@ class Model():
         self.mode = self.config["mode"]
 
         if self.mode == "evaluate":
-            if self.continue_training and self.evaluate_weights is not None:
-                raise ValueError(f"--evaluate_weights should not be passed when --continue_training is set to True.")
-            if not self.continue_training and self.evaluate_weights is None:
-                raise ValueError(f"--evaluate_weights should be passed when --continue_training is set to False.")
+            if self.evaluate_weights is None:
+                raise ValueError(f"--evaluate_weights should be passed when mode is 'evaluate'.")
             
             if not self.continue_training:
                 if not os.path.exists(self.evaluate_weights) and self.evaluate_weights not in ["supervised_resnet50", "random_resnet50"]:

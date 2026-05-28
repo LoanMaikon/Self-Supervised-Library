@@ -288,72 +288,72 @@ class Evaluation():
         def __try_load_models(load_weights):
             errors = []
 
-            if not os.path.isfile(load_weights):
-                match self.evaluate_weights:
-                    case "supervised_resnet50":
-                        self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=True)
-                        self.model_type = "supervised_resnet50"
-                        return
-                    case "random_resnet50":
-                        self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=False)
-                        self.model_type = "random_resnet50"
-                        return
-                    case "dinov2_vits14":
-                        self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-                        self.model_type = "dinov2_vits14"
-                        return
-                    case "dinov2_vitb14":
-                        self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')
-                        self.model_type = "dinov2_vitb14"
-                        return
-                    case "dinov2_vitl14":
-                        self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
-                        self.model_type = "dinov2_vitl14"
-                        return
-                    case "dinov2_vitg14":
-                        self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitg14')
-                        self.model_type = "dinov2_vitg14"
-                        return
-                    case "dinov2_vits14_reg":
-                        self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg')
-                        self.model_type = "dinov2_vits14_reg"
-                        return
-                    case "dinov2_vitb14_reg":
-                        self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg')
-                        self.model_type = "dinov2_vitb14_reg"
-                        return
-                    case "dinov2_vitl14_reg":
-                        self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14_reg')
-                        self.model_type = "dinov2_vitl14_reg"
-                        return
-                    case "dinov2_vitg14_reg":
-                        self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitg14_reg')
-                        self.model_type = "dinov2_vitg14_reg"
-                        return
-                    case "swav_resnet50":
-                        self.encoder = torch.hub.load('facebookresearch/swav:main', 'resnet50')
-                        self.model_type = "swav_resnet50"
-                        return
-                    case "swav_resnet50w2":
-                        self.encoder = torch.hub.load('facebookresearch/swav:main', 'resnet50w2')
-                        self.model_type = "swav_resnet50w2"
-                        return
-                    case "swav_resnet50w4":
-                        self.encoder = torch.hub.load('facebookresearch/swav:main', 'resnet50w4')
-                        self.model_type = "swav_resnet50w4"
-                        return
-                    case "swav_resnet50w5":
-                        self.encoder = torch.hub.load('facebookresearch/swav:main', 'resnet50w5')
-                        self.model_type = "swav_resnet50w5"
-                        return
-                    case _:
-                        raise ValueError(f"Unknown evaluate_weights: {self.evaluate_weights}")
+            # if not os.path.isfile(load_weights) and load_weights is not None:
+            #     match self.evaluate_weights:
+            #         case "supervised_resnet50":
+            #             self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=True)
+            #             self.model_type = "supervised_resnet50"
+            #             return
+            #         case "random_resnet50":
+            #             self.encoder = resnet50_eval(use_checkpoint=self.meta_checkpoint, pretrained=False)
+            #             self.model_type = "random_resnet50"
+            #             return
+            #         case "dinov2_vits14":
+            #             self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+            #             self.model_type = "dinov2_vits14"
+            #             return
+            #         case "dinov2_vitb14":
+            #             self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')
+            #             self.model_type = "dinov2_vitb14"
+            #             return
+            #         case "dinov2_vitl14":
+            #             self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
+            #             self.model_type = "dinov2_vitl14"
+            #             return
+            #         case "dinov2_vitg14":
+            #             self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitg14')
+            #             self.model_type = "dinov2_vitg14"
+            #             return
+            #         case "dinov2_vits14_reg":
+            #             self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg')
+            #             self.model_type = "dinov2_vits14_reg"
+            #             return
+            #         case "dinov2_vitb14_reg":
+            #             self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg')
+            #             self.model_type = "dinov2_vitb14_reg"
+            #             return
+            #         case "dinov2_vitl14_reg":
+            #             self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14_reg')
+            #             self.model_type = "dinov2_vitl14_reg"
+            #             return
+            #         case "dinov2_vitg14_reg":
+            #             self.encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitg14_reg')
+            #             self.model_type = "dinov2_vitg14_reg"
+            #             return
+            #         case "swav_resnet50":
+            #             self.encoder = torch.hub.load('facebookresearch/swav:main', 'resnet50')
+            #             self.model_type = "swav_resnet50"
+            #             return
+            #         case "swav_resnet50w2":
+            #             self.encoder = torch.hub.load('facebookresearch/swav:main', 'resnet50w2')
+            #             self.model_type = "swav_resnet50w2"
+            #             return
+            #         case "swav_resnet50w4":
+            #             self.encoder = torch.hub.load('facebookresearch/swav:main', 'resnet50w4')
+            #             self.model_type = "swav_resnet50w4"
+            #             return
+            #         case "swav_resnet50w5":
+            #             self.encoder = torch.hub.load('facebookresearch/swav:main', 'resnet50w5')
+            #             self.model_type = "swav_resnet50w5"
+            #             return
+            #         case _:
+            #             raise ValueError(f"Unknown evaluate_weights: {self.evaluate_weights}")
 
             match self.meta_framework:
                 case "simclr":
                     try:
                         self.encoder = simclr_resnet50(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "simclr_resnet50"
                         return
                     except Exception as e:
@@ -362,7 +362,7 @@ class Evaluation():
                 case "byol":
                     try:
                         self.encoder = byol_resnet50(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "byol_resnet50"
                         return
                     except Exception as e:
@@ -370,7 +370,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = byol_resnet200(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "byol_resnet200"
                         return
                     except Exception as e:
@@ -379,7 +379,7 @@ class Evaluation():
                 case "ijepa":
                     try:
                         self.encoder = ijepa_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_tiny_16"
                         return
                     except Exception as e:
@@ -387,7 +387,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = ijepa_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_tiny_14"
                         return
                     except Exception as e:
@@ -395,7 +395,7 @@ class Evaluation():
 
                     try:
                         self.encoder = ijepa_vit_small(checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_small_16"
                         return
                     except Exception as e:
@@ -403,7 +403,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = ijepa_vit_small(checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_small_14"
                         return
                     except Exception as e:
@@ -411,7 +411,7 @@ class Evaluation():
 
                     try:
                         self.encoder = ijepa_vit_base(checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_base_16"
                         return
                     except Exception as e:
@@ -419,7 +419,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = ijepa_vit_base(checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_base_14"
                         return
                     except Exception as e:
@@ -427,7 +427,7 @@ class Evaluation():
 
                     try:
                         self.encoder = ijepa_vit_large(checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_large_16"
                         return
                     except Exception as e:
@@ -435,7 +435,7 @@ class Evaluation():
 
                     try:
                         self.encoder = ijepa_vit_large(checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_large_14"
                         return
                     except Exception as e:
@@ -443,7 +443,7 @@ class Evaluation():
 
                     try:
                         self.encoder = ijepa_vit_huge(checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_huge_16"
                         return
                     except Exception as e:
@@ -451,7 +451,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = ijepa_vit_huge(checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_huge_14"
                         return
                     except Exception as e:
@@ -459,7 +459,7 @@ class Evaluation():
 
                     try:
                         self.encoder = ijepa_vit_giant(checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_giant_16"
                         return
                     except Exception as e:
@@ -467,7 +467,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = ijepa_vit_giant(checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ijepa_vit_giant_14"
                         return
                     except Exception as e:
@@ -476,7 +476,7 @@ class Evaluation():
                 case "swav":
                     try:
                         self.encoder = swav_resnet50(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "swav_resnet50"
                         return
                     except Exception as e:
@@ -485,7 +485,7 @@ class Evaluation():
                 case "mae":
                     try:
                         self.encoder = mae_vit_tiny_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "mae_vit_tiny_patch16"
                         return
                     except Exception as e:
@@ -493,7 +493,7 @@ class Evaluation():
 
                     try:
                         self.encoder = mae_vit_small_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "mae_vit_small_patch16"
                         return
                     except Exception as e:
@@ -501,7 +501,7 @@ class Evaluation():
 
                     try:
                         self.encoder = mae_vit_base_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "mae_vit_base_patch16"
                         return
                     except Exception as e:
@@ -509,7 +509,7 @@ class Evaluation():
 
                     try:
                         self.encoder = mae_vit_large_patch16(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "mae_vit_large_patch16"
                         return
                     except Exception as e:
@@ -517,7 +517,7 @@ class Evaluation():
 
                     try:
                         self.encoder = mae_vit_huge_patch14(image_size=self.data_crop_size, use_checkpoint=self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "mae_vit_huge_patch14"
                         return
                     except Exception as e:
@@ -526,7 +526,7 @@ class Evaluation():
                 case "dinov1":
                     try:
                         self.encoder = dinov1_vit_tiny(checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov1_vit_tiny_16"
                         return
                     except Exception as e:
@@ -534,7 +534,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov1_vit_small(use_checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov1_vit_small_16"
                         return
                     except Exception as e:
@@ -542,7 +542,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov1_vit_base(checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov1_vit_base_16"
                         return
                     except Exception as e:
@@ -552,7 +552,7 @@ class Evaluation():
                     try:
                         self.encoder = ibot_vit_tiny(use_checkpoint=self.meta_checkpoint, patch_size=16, drop_path_rate=0)
                         self.encoder.masked_im_modeling = False
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ibot_vit_tiny_16"
                         return
                     except Exception as e:
@@ -561,7 +561,7 @@ class Evaluation():
                     try:
                         self.encoder = ibot_vit_small(use_checkpoint=self.meta_checkpoint, patch_size=16, drop_path_rate=0)
                         self.encoder.masked_im_modeling = False
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ibot_vit_small_16"
                         return
                     except Exception as e:
@@ -570,7 +570,7 @@ class Evaluation():
                     try:
                         self.encoder = ibot_vit_base(use_checkpoint=self.meta_checkpoint, patch_size=16, drop_path_rate=0)
                         self.encoder.masked_im_modeling = False
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ibot_vit_base_16"
                         return
                     except Exception as e:
@@ -579,7 +579,7 @@ class Evaluation():
                     try:
                         self.encoder = ibot_vit_large(use_checkpoint=self.meta_checkpoint, patch_size=16, drop_path_rate=0)
                         self.encoder.masked_im_modeling = False
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "ibot_vit_large_16"
                         return
                     except Exception as e:
@@ -588,7 +588,7 @@ class Evaluation():
                 case "dinov2":
                     try:
                         self.encoder = dinov2_vit_tiny(use_checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_tiny_16"
                         return
                     except Exception as e:
@@ -596,7 +596,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = dinov2_vit_tiny(use_checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_tiny_14"
                         return
                     except Exception as e:
@@ -604,7 +604,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov2_vit_small(use_checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_small_16"
                         return
                     except Exception as e:
@@ -612,7 +612,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov2_vit_small(use_checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_small_14"
                         return
                     except Exception as e:
@@ -620,7 +620,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = dinov2_vit_base(use_checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_base_16"
                         return
                     except Exception as e:
@@ -628,7 +628,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov2_vit_base(use_checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_base_14"
                         return
                     except Exception as e:
@@ -636,7 +636,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = dinov2_vit_large(use_checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_large_16"
                         return
                     except Exception as e:
@@ -644,7 +644,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov2_vit_large(use_checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_large_14"
                         return
                     except Exception as e:
@@ -652,7 +652,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = dinov2_vit_giant(use_checkpoint=self.meta_checkpoint, patch_size=16)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_giant_16"
                         return
                     except Exception as e:
@@ -660,7 +660,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov2_vit_giant(use_checkpoint=self.meta_checkpoint, patch_size=14)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_giant_14"
                         return
                     except Exception as e:
@@ -669,7 +669,7 @@ class Evaluation():
                     # Registers
                     try:
                         self.encoder = dinov2_vit_small(use_checkpoint=self.meta_checkpoint, patch_size=14, num_register_tokens=4)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_small_14_4reg"
                         return
                     except Exception as e:
@@ -677,7 +677,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov2_vit_base(use_checkpoint=self.meta_checkpoint, patch_size=14, num_register_tokens=4)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_base_14_4reg"
                         return
                     except Exception as e:
@@ -685,7 +685,7 @@ class Evaluation():
                     
                     try:
                         self.encoder = dinov2_vit_large(use_checkpoint=self.meta_checkpoint, patch_size=14, num_register_tokens=4)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_large_14_4reg"
                         return
                     except Exception as e:
@@ -693,7 +693,7 @@ class Evaluation():
 
                     try:
                         self.encoder = dinov2_vit_giant(use_checkpoint=self.meta_checkpoint, patch_size=14, num_register_tokens=4)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "dinov2_vit_giant_14_4reg"
                         return
                     except Exception as e:
@@ -703,7 +703,7 @@ class Evaluation():
                 case "barlow_twins":
                     try:
                         self.encoder = barlow_twins_resnet50(use_checkpoint=self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "barlow_twins_resnet50"
                         return
                     except Exception as e:
@@ -712,7 +712,7 @@ class Evaluation():
                 case "vicreg":
                     try:
                         self.encoder = vicreg_resnet34(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "vicreg_resnet34"
                         return
                     except Exception as e:
@@ -720,7 +720,7 @@ class Evaluation():
 
                     try:
                         self.encoder = vicreg_resnet50(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "vicreg_resnet50"
                         return
                     except Exception as e:
@@ -728,7 +728,7 @@ class Evaluation():
 
                     try:
                         self.encoder = vicreg_resnet101(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "vicreg_resnet101"
                         return
                     except Exception as e:
@@ -736,7 +736,7 @@ class Evaluation():
 
                     try:
                         self.encoder = vicreg_resnet200x2(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "vicreg_resnet200x2"
                         return
                     except Exception as e:
@@ -744,7 +744,7 @@ class Evaluation():
 
                     try:
                         self.encoder = vicreg_resnet50x2(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "vicreg_resnet50x2"
                         return
                     except Exception as e:
@@ -752,7 +752,7 @@ class Evaluation():
 
                     try:
                         self.encoder = vicreg_resnet50x4(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "vicreg_resnet50x4"
                         return
                     except Exception as e:
@@ -760,7 +760,7 @@ class Evaluation():
 
                     try:
                         self.encoder = vicreg_resnet50x5(self.meta_checkpoint)
-                        self.encoder.load_weights(self.evaluate_weights, device=self.device)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "vicreg_resnet50x5"
                         return
                     except Exception as e:
@@ -773,10 +773,7 @@ class Evaluation():
                 f"Failed to load weights from {self.evaluate_weights}. Errors: {errors}."
             )
 
-        if self.evaluate_weights is not None:
-            __try_load_models(load_weights=True)
-        else: # --continue_training
-            __try_load_models(load_weights=False)
+        __try_load_models(load_weights=True)
 
         print(self.model_type)
 

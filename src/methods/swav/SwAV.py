@@ -11,8 +11,8 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, resnet50w2, resnet50w4, resnet50w5, projection_head, prototypes
 from src.datasets import datasets
-from src.lars import LARS
 from src.sinkhorn import sinkhorn
+from src.lars import LARS
 
 class SwAV():
     def __init__(self,

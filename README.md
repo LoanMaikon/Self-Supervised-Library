@@ -19,6 +19,7 @@ The following self-supervised methods are currently available:
 - I-JEPA
 - iBOT
 - DINOv1
+- DINOv2
 - Barlow Twins
 - VICReg
 
@@ -58,12 +59,6 @@ For those who have a poor card (like me), you can stop the executions any time a
 ```bash
 nohup torchrun --nproc_per_node=1 main.py --config configs/pretraining/pretraining_simclr.yaml --devices cuda:0 --output_folder ../simclr --continue_training &
 ```
-
-```bash
-nohup torchrun --nproc_per_node=1 main.py --config configs/evaluate/evaluate_simclr.yaml --devices cuda:0 --output_folder ../simclr/linear_evaluation --continue_training &
-```
-
-Note that for Linear Evaluation and Fine-tuning, when `--continue_training` is passed, there is no need for passing `--evaluate_weights` again.
 
 ---
 

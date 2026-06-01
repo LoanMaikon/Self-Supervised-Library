@@ -126,7 +126,6 @@ class DINOv2():
                             teacher_patch_tokens.flatten(0, 1)
                         ).view(teacher_patch_tokens.shape[0], teacher_patch_tokens.shape[1], -1).float()
 
-                        # CLS teacher targets com temperatura do teacher
                         teacher_cls_targets_list = [
                             sinkhorn(
                                 chunk / teacher_temp_cls,
@@ -137,7 +136,6 @@ class DINOv2():
                             for chunk in teacher_cls_after_head.chunk(n_global_crops)
                         ]
 
-                        # Patch teacher targets com temperatura do teacher
                         teacher_patch_targets_list = None
                         if global_masks:
                             teacher_patch_chunks = teacher_patch_after_head.chunk(n_global_crops)
@@ -685,7 +683,6 @@ class DINOv2():
         self.meta_mask_ratio = list(map(float, self.config['meta']['mask_ratio']))
         self.meta_mask_ratio_var = list(map(float, self.config['meta']['mask_ratio_var']))
         self.meta_mask_aspect_ratio = list(map(float, self.config['meta']['mask_aspect_ratio']))
-        self.meta_mask_sample_probability = float(self.config['meta']['mask_sample_probability'])
 
         self.optimization_ipe_scale = float(self.config['optimization']['ipe_scale'])
         self.optimization_ema = list(map(float, self.config['optimization']['ema']))

@@ -61,15 +61,14 @@ meta:
     norm_last_layer: false
     n_layers: 3
   mask_ratio:
-    - 0.1
-    - 0.5
+    - 0.0
+    - 0.3
   mask_ratio_var:
     - 0.0
-    - 0.0
+    - 0.2
   mask_aspect_ratio:
     - 0.3
     - 3.33333
-  mask_sample_probability: 0.5
 
 optimization:
   ipe_scale: 1.0

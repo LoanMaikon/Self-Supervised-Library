@@ -18,7 +18,8 @@ class MaskCollator(object):
                  num_local_crops,
                  num_attempts=10,
                  pred_shape="block",
-                 pred_start_epoch=0):
+                 pred_start_epoch=0,
+        ):
         super(MaskCollator, self).__init__()
 
         self.patch_size = patch_size

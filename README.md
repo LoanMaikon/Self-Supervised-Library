@@ -74,42 +74,20 @@ This also allows you to experiment original models with custom datasets.
 
 ---
 
-## 6. Results
-
-We conducted several experiments to reproduce the official results and evaluate different hyperparameter settings.
-
-### SimCLR
-
-| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | LR (init / max / final) | Weight Decay | Temperature | Notes |
-|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|
-| ResNet-50 | 100 (10) | 59.37 | 512 | 1e-5 / 0.6 / 0 | 1e-6 | 0.1 | - |
-
-### BYOL
-
-| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | LR (init / max / final) | Weight Decay | EMA (init / final) | Notes |
-|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|
-| ResNet-50 | 100 (10) | 61.42 | 512 | 1e-4 / 0.4 / 0 | 1e-6 | 0.9995 / 1.0 | Scheduler configured for 1000 epochs,<br>but training stopped at 100 epochs. |
-| ResNet-50 | 100 (10) | 57.93 | 512 | 1e-4 / 0.4 / 0 | 1e-6 | 0.996 / 1.0 | - |
-
-### SwAV
-
-| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | Global / Local Views | LR (init / max / final) | Weight Decay | Temperature | Notes |
-|:---:|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|
-| ResNet-50 | 200 (0) | 70.90 | 256 | 2 / 4 | 1e-5 / 0.6 / 6e-4 | 1e-6 | 0.1 | Queue length of 3840 starting at epoch 15.<br>Prototype freezing for 5005 iterations. |
-
-### DINO
-
-| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | Global / Local Views | LR (init / max / final) | Weight Decay (init / final) | EMA (init / final) | Teacher Temp. (init / max / final) (Warmup) | Notes |
-|:---:|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|:---|
-| ViT-S | 100 (0) | 59.52 | 256 | 2 / 0 | 5e-5 / 5e-4 / 1e-6 | 0.04 / 0.4 | 0.9995 / 1.0 | 0.04 / 0.07 / 0.07 (30) | - |
-| ViT-S | 100 (0) | 67.18 | 256 | 2 / 2 | 5e-5 / 5e-4 / 1e-6 | 0.04 / 0.4 | 0.9995 / 1.0 | 0.04 / 0.04 / 0.04 (0) | - |
-
-### iBOT
-
-| Model | Epochs (Warmup) | Top-1 Acc. | Batch Size | Global / Local Views | LR (init / max / final) | Weight Decay (init / final) | EMA (init / final) | Teacher Temp. CLS (init / max / final) (Warmup) | Teacher Temp. Patch (init / max / final) (Warmup) | Notes |
-|:---:|:---:|:---:|:---:|:---:|:---|:---:|:---:|:---|:---|:---|
-| ViT-S | 100 (10) | 71.94 | 256 | 2 / 2 | 5e-5 / 5e-4 / 1e-6 | 0.04 / 0.4 | 0.996 / 1.0 | 0.04 / 0.07 / 0.07 (30) | 0.04 / 0.07 / 0.07 (30) | - |
-
+| Method | Model     |  Epochs  | Batch Size | Top-1 Accuracy | Notes                                                                                                                                                                                     |
+| :----- | :-------- | :------: | :--------: | :------------: | :------------------------------------------------------- |
+| SimCLR | ResNet-50 | 100 | 512 | 59.37     | LR: 1e-5 / 0.6 / 0; Weight Decay: 1e-6; Temperature: 0.1; warmup: 10 |
+| BYOL | ResNet-50 | 100 | 512 | 61.42 | LR: 1e-4 / 0.4 / 0; Weight Decay: 1e-6; EMA: 0.9995 / 1.0; Scheduler configured for 1000 epochs, but training stopped at 100 epochs; warmup: 10|
+| BYOL | ResNet-50 | 100 | 512 | 57.93 | LR: 1e-4 / 0.4 / 0; Weight Decay: 1e-6; EMA: 0.996 / 1.0; warmup: 10 |
+| SwAV | ResNet-50 | 200 | 256 | 70.90 | Global / Local Views: 2 / 4; LR: 1e-5 / 0.6 / 6e-4; Weight Decay: 1e-6; Temperature: 0.1; Queue length of 3840 starting at epoch 15; Prototype freezing for 5005 iterations.; warmup: 0 |
+| DINO | ViT-S | 100 | 256 | 59.52 | Global / Local Views: 2 / 0; LR: 5e-5 / 5e-4 / 1e-6; Weight Decay: 0.04 / 0.4; EMA: 0.9995 / 1.0; Teacher Temp.: 0.04 / 0.07 / 0.07 (30); warmup: 0 |
+| DINO | ViT-S | 100 | 256 | 67.18 | Global / Local Views: 2 / 2; LR: 5e-5 / 5e-4 / 1e-6; Weight Decay: 0.04 / 0.4; EMA: 0.9995 / 1.0; Teacher Temp.: 0.04 / 0.04 / 0.04 (0); warmup: 0 |
+| iBOT | ViT-S | 100 | 256 | 71.94 | Global / Local Views: 2 / 2; LR: 5e-5 / 5e-4 / 1e-6; Weight Decay: 0.04 / 0.4; EMA: 0.996 / 1.0; Teacher Temp. CLS: 0.04 / 0.07 / 0.07 (30); Teacher Temp. Patch: 0.04 / 0.07 / 0.07 (30); warmup: 10 |
+| I-JEPA | ViT-B | 100 | 256 | 47.49 | Warmup: 15; EMA: 0.996 / 1.0; lr: 1e-4 / 1e-3 / 1e-6; wd: 0.04 / 0.4 |
+| I-JEPA | ViT-B | 100 | 256 | 50.41 | Warmup: 15; EMA: 0.996 / 1.0; lr: 1e-4 / 5e-3 / 1e-6; scheduler set for 600 epochs, stopped at 100 epochs; wd: 0.04 / 0.4 |
+| I-JEPA | ViT-B | 100 | 256 | 58.22 | Warmup: 15; EMA: 0.9995 / 1.0; lr: 1e-4 / 1e-3 / 1e-6; scheduler set for 600 epochs, stopped at 100 epochs; wd: 0.04 / 0.4 |
+| MAE | ViT-B | 400 | 256 | 50.31 | Scheduler set to 800 epochs, stopped at 400 epochs; lr: 1e-5 / 3e-5 / 0; wd: 0.5; warmup: 40 |
+| MAE | ViT-B | 800 | 256 | 54.27 | lr: 1e-5 / 3e-5 / 0; wd: 0.5; warmup: 40 |
 
 The full training runs and additional experiments with different hyperparameter configurations can be found [here](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library).
 

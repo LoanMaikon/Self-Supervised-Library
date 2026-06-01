@@ -74,6 +74,8 @@ This also allows you to experiment original models with custom datasets.
 
 ---
 
+## 6. Results
+
 | Method | Model     |  Epochs  | Batch Size | Top-1 Accuracy | Notes                                                                                                                                                                                     |
 | :----- | :-------- | :------: | :--------: | :------------: | :------------------------------------------------------- |
 | SimCLR | ResNet-50 | 100 | 512 | 59.37     | LR: 1e-5 / 0.6 / 0; Weight Decay: 1e-6; Temperature: 0.1; warmup: 10 |

@@ -2,6 +2,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
 import torch.nn.functional as F
+from functools import partial
 import torch.optim as optim
 import torch
 import copy
@@ -11,12 +12,14 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
     recreate_csv_log, get_last_epoch, load_last_values
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearWarmupTemperatureSchedule
+from src.methods.dinov2.mask_collator import MaskingGenerator, collate_data_and_cast
 from .models import vit_base, vit_small, vit_tiny, vit_large, vit_giant2
-from src.methods.ibot.mask_collator import MaskCollator
+from src.methods.dinov2.ibot_loss import iBOTPatchLoss
 from src.methods.ibot.models import projection_head
+from src.methods.dinov2.dino_loss import DINOLoss
 from src.koleo_loss import KoLeoLoss
-from src.sinkhorn import sinkhorn
 from src.datasets import datasets
+from xformers.ops import fmha
 
 class DINOv2():
     def __init__(self,
@@ -50,6 +53,14 @@ class DINOv2():
         self.ema_values = []
 
         self.koleo_loss = KoLeoLoss().to(self.device)
+        self.dino_loss = DINOLoss(
+            out_dim=self.meta_projection_head_dino_output_dim,
+            student_temp=self.optimization_temperature_student_cls[0],
+        ).to(self.device)
+        self.ibot_loss = iBOTPatchLoss(
+            patch_out_dim=self.meta_projection_head_ibot_output_dim,
+            student_temp=self.optimization_temperature_student_patch[0],
+        ).to(self.device)
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
@@ -72,166 +83,166 @@ class DINOv2():
     def train(self):
         write_on_log("Starting training...", self.output_folder)
 
-
         for epoch in range(1, self.optimization_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
                 continue
 
             write_on_log(f"Epoch {epoch}/{self.optimization_epochs}", self.output_folder)
             self.train_sampler.set_epoch(epoch)
-            self.train_dataloader.collate_fn.set_epoch(epoch)
 
             self.train_loss.append(0.0)
             num_samples = 0
 
-            for iteration, ((images, _), masks) in enumerate(self.train_dataloader):
+            for iteration, images_dict in enumerate(self.train_dataloader):
                 self.optimizer.zero_grad(set_to_none=True)
 
-                images = [img.to(self.device, non_blocking=True) for img in images]
-                masks = [mask.to(self.device, non_blocking=True) for mask in masks]
-                batch_size = images[0].size(0)
+                global_crops = images_dict["collated_global_crops"].to(self.device, non_blocking=True) # [B * global_crops, C, H, W]
+                local_crops = images_dict["collated_local_crops"].to(self.device, non_blocking=True) # [B * local_crops, C, H, W]
+                masks = images_dict["collated_masks"].to(self.device, non_blocking=True) # [B * global_crops, num_patches]
+                mask_indices_list = images_dict["mask_indices_list"].to(self.device, non_blocking=True) # [total_masked_patches], ex: [[1, 4, 6, ...], [0, 2, 5, ...], ...]
+                n_masked_patches_tensor = images_dict["n_masked_patches"].to(self.device, non_blocking=True) # int, total number of masked patches in the batch
+                n_masked_patches = mask_indices_list.shape[0] # int, total number of masked patches in the batch
+                upperbound = images_dict["upperbound"] # int, max number of masked patches in a single image
+                masks_weight = images_dict["masks_weight"].to(self.device, non_blocking=True) # [total_masked_patches], for each image contribute equally to the loss regardless of the number of masked patches
 
-                n_global_crops = self.data_global_views_num
-                n_local_crops = len(images) - n_global_crops
+                n_local_crops_loss_terms = max(self.data_local_views_num * self.data_global_views_num, 1)
+                n_global_crops_loss_terms = (self.data_global_views_num - 1) * self.data_global_views_num
 
-                global_images = images[:n_global_crops]
-                local_images = images[n_global_crops:]
+                with torch.amp.autocast(device_type=self.device.type, enabled=False):
+                    with torch.no_grad(): # Teacher outputs
+                        x, n_global_crops_teacher = global_crops, self.data_global_views_num
+                        teacher_backbone_output_dict = self.target_encoder(x, is_training=True)
+                        teacher_cls_tokens = teacher_backbone_output_dict["x_norm_clstoken"]
+                        teacher_cls_tokens = teacher_cls_tokens.chunk(n_global_crops_teacher)
+                        # watch out: these are chunked and cat'd in reverse so A is matched to B in the global crops dino loss
+                        teacher_cls_tokens = torch.cat((teacher_cls_tokens[1], teacher_cls_tokens[0]))
+                        ibot_teacher_patch_tokens = teacher_backbone_output_dict["x_norm_patchtokens"]
+                        _dim = ibot_teacher_patch_tokens.shape[-1]
+                        n_cls_tokens = teacher_cls_tokens.shape[0]
 
-                global_masks = masks[:n_global_crops]
-                if global_masks:
-                    global_masks = [mask.flatten(1) for mask in global_masks]
-                    global_masks_cat = torch.cat(global_masks, dim=0)
-                else:
-                    global_masks_cat = None
-
-                global_images_cat = torch.cat(global_images, dim=0)
-                local_images_cat = torch.cat(local_images, dim=0) if n_local_crops > 0 else None
-
-                student_temp_cls = self.student_cls_temperature_scheduler.get_value()
-                student_temp_patch = self.student_patch_temperature_scheduler.get_value()
-                teacher_temp_cls = self.teacher_cls_temperature_scheduler.get_value()
-                teacher_temp_patch = self.teacher_patch_temperature_scheduler.get_value()
-
-                with torch.amp.autocast(device_type=self.device.type):
-                    with torch.no_grad():
-                        teacher_out = self.target_encoder(global_images_cat, masks=None, is_training=True)
-                        teacher_cls_tokens = teacher_out["x_norm_clstoken"]
-                        teacher_patch_tokens = teacher_out["x_norm_patchtokens"]
-
-                        teacher_cls_chunks = teacher_cls_tokens.chunk(n_global_crops)
-                        teacher_cls_reordered = torch.cat(list(teacher_cls_chunks)[::-1], dim=0)
-                        teacher_cls_after_head = self.target_projection_head_cls(teacher_cls_reordered).float()
-
-                        teacher_patch_after_head = self.target_projection_head_patch(
-                            teacher_patch_tokens.flatten(0, 1)
-                        ).view(teacher_patch_tokens.shape[0], teacher_patch_tokens.shape[1], -1).float()
-
-                        teacher_cls_targets_list = [
-                            sinkhorn(
-                                chunk / teacher_temp_cls,
-                                self.optimization_sinkhorn_epsilon,
-                                self.optimization_sinkhorn_iterations,
-                                self.world_size,
-                            )
-                            for chunk in teacher_cls_after_head.chunk(n_global_crops)
+                        buffer_tensor_teacher = ibot_teacher_patch_tokens.new_zeros(upperbound, _dim)
+                        torch.index_select(
+                            ibot_teacher_patch_tokens.flatten(0, 1),
+                            dim=0,
+                            index=mask_indices_list,
+                            out=buffer_tensor_teacher[:n_masked_patches],
+                        )
+                        teacher_cls_tokens_after_head = self.target_projection_head_cls(teacher_cls_tokens)
+                        masked_teacher_patch_tokens_after_head = self.target_projection_head_patch(buffer_tensor_teacher)[
+                            :n_masked_patches
                         ]
 
-                        teacher_patch_targets_list = None
-                        if global_masks:
-                            teacher_patch_chunks = teacher_patch_after_head.chunk(n_global_crops)
-                            teacher_patch_targets_list = []
+                        teacher_dino_softmaxed_centered_list = self.dino_loss.sinkhorn_knopp_teacher(
+                            teacher_cls_tokens_after_head, self.teacher_cls_temperature_scheduler.get_value(), self.optimization_sinkhorn_iterations
+                        ).view(n_global_crops_teacher, -1, *teacher_cls_tokens_after_head.shape[1:])
 
-                            for iq in range(n_global_crops):
-                                mask = global_masks[iq].bool()
-                                if mask.sum() == 0:
-                                    teacher_patch_targets_list.append((None, mask))
-                                    continue
+                        masked_teacher_ibot_softmaxed_centered = self.ibot_loss.sinkhorn_knopp_teacher(
+                            masked_teacher_patch_tokens_after_head,
+                            teacher_temp=self.teacher_patch_temperature_scheduler.get_value(),
+                            n_masked_patches_tensor=n_masked_patches_tensor,
+                            n_iterations=self.optimization_sinkhorn_iterations,
+                        )
+                    
+                    loss_dict = {}
+                    loss_accumulator = 0 # For backpropagation
 
-                                teacher_patch_masked = teacher_patch_chunks[iq][mask]
-                                t = sinkhorn(
-                                    teacher_patch_masked / teacher_temp_patch,
-                                    self.optimization_sinkhorn_epsilon,
-                                    self.optimization_sinkhorn_iterations,
-                                    self.world_size,
-                                )
-                                teacher_patch_targets_list.append((t, mask))
-
-                    student_out_global = self.encoder(global_images_cat, masks=global_masks_cat, is_training=True)
-                    student_cls_tokens_global = student_out_global["x_norm_clstoken"]
-                    student_patch_tokens_global = student_out_global["x_norm_patchtokens"]
-
-                    student_cls_after_head_global = self.projection_head_cls(student_cls_tokens_global).float()
-                    student_patch_after_head_global = self.projection_head_patch(
-                        student_patch_tokens_global.flatten(0, 1)
-                    ).view(student_patch_tokens_global.shape[0], student_patch_tokens_global.shape[1], -1).float()
-
-                    student_cls_after_head_local = None
-                    if n_local_crops > 0:
-                        local_out = self.encoder(local_images_cat, masks=None, is_training=True)
-                        student_cls_after_head_local = self.projection_head_cls(local_out["x_norm_clstoken"]).float()
-
-                    n_local_terms = max(n_local_crops * n_global_crops, 1)
-                    n_global_terms = (n_global_crops - 1) * n_global_crops
-                    dino_den = n_local_terms + n_global_terms
-
-                    dino_local_loss = torch.tensor(0.0, device=self.device)
-                    if n_local_crops > 0:
-                        for s in student_cls_after_head_local.chunk(n_local_crops):
-                            for t in teacher_cls_targets_list:
-                                dino_local_loss += torch.sum(
-                                    -t * F.log_softmax(s / student_temp_cls, dim=-1),
-                                    dim=-1,
-                                ).mean()
-                        dino_local_loss = dino_local_loss / dino_den
-
-                    teacher_global_all = torch.cat(teacher_cls_targets_list, dim=0)
-                    dino_global_loss = torch.sum(
-                        -teacher_global_all * F.log_softmax(student_cls_after_head_global / student_temp_cls, dim=-1),
-                        dim=-1,
-                    ).mean()
-                    dino_global_loss = dino_global_loss * 2.0 / dino_den
-                    dino_loss = dino_local_loss + dino_global_loss
-
-                    ibot_loss = torch.tensor(0.0, device=self.device)
-                    if global_masks:
-                        teacher_patch_chunks = teacher_patch_after_head.chunk(n_global_crops)
-                        student_patch_chunks = student_patch_after_head_global.chunk(n_global_crops)
-
-                        for iq in range(n_global_crops):
-                            mask = global_masks[iq].bool()
-                            if mask.sum() == 0:
-                                continue
-
-                            teacher_patch_target, _ = teacher_patch_targets_list[iq]
-                            if teacher_patch_target is None:
-                                continue
-
-                            student_patch_masked = student_patch_chunks[iq][mask]
-                            loss_per_patch = torch.sum(
-                                -teacher_patch_target * F.log_softmax(student_patch_masked / student_temp_patch, dim=-1),
-                                dim=-1,
-                            )
-
-                            mask_indices = mask.nonzero(as_tuple=False)
-                            per_image_sum = torch.zeros(batch_size, device=loss_per_patch.device)
-                            per_image_count = torch.zeros(batch_size, device=loss_per_patch.device)
-
-                            per_image_sum.index_add_(0, mask_indices[:, 0], loss_per_patch)
-                            per_image_count.index_add_(0, mask_indices[:, 0], torch.ones_like(loss_per_patch))
-
-                            ibot_loss += (per_image_sum / per_image_count.clamp(min=1.0)).mean()
-
-                        ibot_loss = ibot_loss * (2.0 / n_global_crops)
-
-                    koleo_loss = torch.tensor(0.0, device=self.device)
-                    if self.optimization_koleo_loss_weight > 0:
-                        koleo_loss = sum(self.koleo_loss(p) for p in student_cls_tokens_global.chunk(n_global_crops))
-
-                    total_loss = (
-                        self.optimization_dino_loss_weight * dino_loss
-                        + self.optimization_ibot_loss_weight * ibot_loss
-                        + self.optimization_koleo_loss_weight * koleo_loss
+                    student_global_backbone_output_dict, student_local_backbone_output_dict = self.encoder(
+                        [global_crops, local_crops], masks=[masks, None], is_training=True
                     )
+
+                    inputs_for_student_head_list = []
+
+                    # 1a: local crops cls tokens
+                    student_local_cls_tokens = student_local_backbone_output_dict["x_norm_clstoken"]
+                    inputs_for_student_head_list.append(student_local_cls_tokens.unsqueeze(0))
+
+                    # 1b: global crops cls tokens
+                    student_global_cls_tokens = student_global_backbone_output_dict["x_norm_clstoken"]
+                    inputs_for_student_head_list.append(student_global_cls_tokens.unsqueeze(0))
+
+                    _dim = student_global_backbone_output_dict["x_norm_clstoken"].shape[-1]
+                    ibot_student_patch_tokens = student_global_backbone_output_dict["x_norm_patchtokens"]
+                    buffer_tensor_patch_tokens = ibot_student_patch_tokens.new_zeros(upperbound, _dim)
+                    buffer_tensor_patch_tokens[:n_masked_patches].copy_(
+                        torch.index_select(ibot_student_patch_tokens.flatten(0, 1), dim=0, index=mask_indices_list)
+                    )
+
+                    student_global_masked_patch_tokens_after_head = self.projection_head_patch(buffer_tensor_patch_tokens)[
+                        :n_masked_patches
+                    ]
+
+                    _attn_bias, cat_inputs = fmha.BlockDiagonalMask.from_tensor_list(inputs_for_student_head_list)
+                    outputs_list = _attn_bias.split(self.projection_head_cls(cat_inputs))
+
+                    # 3a: local crops cls tokens
+                    student_local_cls_tokens_after_head = outputs_list.pop(0).squeeze(0)
+
+                    # 3b: global crops cls tokens
+                    student_global_cls_tokens_after_head = outputs_list.pop(0).squeeze(0)
+
+                    if self.data_local_views_num > 0:
+                        dino_local_crops_loss = self.dino_loss(
+                            student_output_list=student_local_cls_tokens_after_head.chunk(self.data_local_views_num),
+                            teacher_out_softmaxed_centered_list=teacher_dino_softmaxed_centered_list,
+                        ) / (n_global_crops_loss_terms + n_local_crops_loss_terms)
+
+                        # store for display
+                        loss_dict["dino_local_crops_loss"] = dino_local_crops_loss
+
+                        # accumulate loss
+                        loss_accumulator += self.optimization_dino_loss_weight * dino_local_crops_loss
+                    
+                    # process global crops
+                    loss_scales = 2  # this is here since we process global crops together
+
+                    # compute loss
+                    dino_global_crops_loss = (
+                        self.dino_loss(
+                            student_output_list=[student_global_cls_tokens_after_head],
+                            teacher_out_softmaxed_centered_list=[
+                                teacher_dino_softmaxed_centered_list.flatten(0, 1)
+                            ],  # these were chunked and stacked in reverse so A is matched to B
+                        )
+                        * loss_scales
+                        / (n_global_crops_loss_terms + n_local_crops_loss_terms)
+                    )
+
+                    loss_dict["dino_global_crops_loss"] = dino_global_crops_loss
+
+                    # accumulate loss
+                    loss_accumulator += self.dino_loss_weight * dino_global_crops_loss
+
+                    student_cls_tokens = student_global_cls_tokens
+
+                    koleo_loss = self.cfg.dino.koleo_loss_weight * sum(
+                        self.koleo_loss(p) for p in student_cls_tokens.chunk(2)
+                    )  # we don't apply koleo loss between cls tokens of a same image
+                    loss_accumulator += koleo_loss
+                    loss_dict["koleo_loss"] = (
+                        koleo_loss / loss_scales
+                    )  # this is to display the same losses as before but we can remove eventually
+
+                    # compute loss
+                    ibot_patch_loss = (
+                        self.ibot_loss.forward_masked(
+                            student_global_masked_patch_tokens_after_head,
+                            masked_teacher_ibot_softmaxed_centered,
+                            student_masks_flat=masks,
+                            n_masked_patches=n_masked_patches,
+                            masks_weight=masks_weight,
+                        )
+                        * loss_scales
+                        * (1 / self.data_global_views_num)
+                    )
+
+                    # store for display
+                    loss_dict["ibot_loss"] = ibot_patch_loss / 2
+
+                    # accumulate loss
+                    loss_accumulator += self.ibot_loss_weight * ibot_patch_loss
+                
+                total_loss = loss_accumulator
+                batch_size = global_crops.shape[0] // self.data_global_views_num
 
                 loss_value = total_loss.item()
                 self.train_loss[-1] += loss_value * batch_size
@@ -260,6 +271,7 @@ class DINOv2():
                 self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())
                 self.ema_values.append(self.ema_scheduler.get_value())
+
                 write_on_csv(
                     self.output_folder, epoch, iteration, loss_value,
                     self.lr_values[-1], self.wd_values[-1], self.ema_values[-1]
@@ -450,15 +462,20 @@ class DINOv2():
                 raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
 
     def _load_dataloader(self):
-        mask_collator = MaskCollator(
-            patch_size=self.meta_patch_size,
-            global_crop_size=self.data_global_views_crop_size,
-            local_crop_size=self.data_local_views_crop_size,
-            pred_ratio=self.meta_mask_ratio,
-            pred_ratio_var=self.meta_mask_ratio_var,
-            pred_aspect_ratio=self.meta_mask_aspect_ratio,
-            num_global_crops=self.data_global_views_num,
-            num_local_crops=self.data_local_views_num,
+        masking_generator = MaskingGenerator(
+            input_size=(self.data_global_views_crop_size // self.meta_patch_size, self.data_global_views_crop_size // self.meta_patch_size),
+            max_num_patches=0.5 * self.data_global_views_crop_size // self.meta_patch_size * self.data_global_views_crop_size // self.meta_patch_size,
+        )
+
+        collate_fn = partial(
+            collate_data_and_cast,
+            mask_ratio_tuple=self.meta_mask_ratio,
+            mask_probability=self.meta_mask_probability,
+            n_tokens=(self.data_global_views_crop_size // self.meta_patch_size) ** 2,
+            mask_generator=masking_generator,
+            dtype=torch.float16,
+            n_global_crops=self.data_global_views_num,
+            n_local_crops=self.data_local_views_num,
         )
 
         self.train_dataset = datasets(
@@ -481,7 +498,7 @@ class DINOv2():
             prefetch_factor=self.data_prefetch_factor,
             pin_memory=self.data_pin_memory,
             drop_last=self.data_drop_last,
-            collate_fn=mask_collator,
+            collate_fn=collate_fn,
         )
 
     def _load_transform(self):
@@ -681,8 +698,7 @@ class DINOv2():
         self.meta_projection_head_ibot_norm_last_layer = bool(self.config['meta']['projection_head_ibot']['norm_last_layer'])
         self.meta_projection_head_ibot_n_layers = int(self.config['meta']['projection_head_ibot']['n_layers'])
         self.meta_mask_ratio = list(map(float, self.config['meta']['mask_ratio']))
-        self.meta_mask_ratio_var = list(map(float, self.config['meta']['mask_ratio_var']))
-        self.meta_mask_aspect_ratio = list(map(float, self.config['meta']['mask_aspect_ratio']))
+        self.meta_mask_probability = float(self.config['meta']['mask_probability'])
 
         self.optimization_ipe_scale = float(self.config['optimization']['ipe_scale'])
         self.optimization_ema = list(map(float, self.config['optimization']['ema']))
@@ -700,6 +716,7 @@ class DINOv2():
         self.optimization_ibot_loss_weight = float(self.config['optimization']['ibot_loss_weight'])
         self.optimization_koleo_loss_weight = float(self.config['optimization']['koleo_loss_weight'])
         self.optimization_freeze_last_layer_epochs = int(self.config['optimization']['freeze_last_layer_epochs'])
-        self.optimization_sinkhorn_epsilon = float(self.config['optimization']['sinkhorn_epsilon'])
         self.optimization_sinkhorn_iterations = int(self.config['optimization']['sinkhorn_iterations'])
         self.optimization_num_register_tokens = int(self.config['optimization']['num_register_tokens'])
+
+        self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

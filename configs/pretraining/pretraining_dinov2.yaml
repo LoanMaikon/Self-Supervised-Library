@@ -3,8 +3,8 @@ mode: dinov2
 data:
   datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 256
-  num_workers: 64
+  batch_size: 16
+  num_workers: 32
   prefetch_factor: 1
   pin_memory: false
   drop_last: true
@@ -61,14 +61,9 @@ meta:
     norm_last_layer: false
     n_layers: 3
   mask_ratio:
-    - 0.0
-    - 0.3
-  mask_ratio_var:
-    - 0.0
-    - 0.2
-  mask_aspect_ratio:
-    - 0.3
-    - 3.33333
+    - 0.1
+    - 0.5
+  mask_probability: 0.5
 
 optimization:
   ipe_scale: 1.0
@@ -106,6 +101,5 @@ optimization:
   ibot_loss_weight: 1.0
   koleo_loss_weight: 0.1
   freeze_last_layer_epochs: 1
-  sinkhorn_epsilon: 0.05
   sinkhorn_iterations: 3
   num_register_tokens: 0

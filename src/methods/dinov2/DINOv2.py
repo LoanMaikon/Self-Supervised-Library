@@ -13,9 +13,8 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearWarmupTemperatureSchedule
 from src.methods.dinov2.mask_collator import MaskingGenerator, collate_data_and_cast
-from .models import vit_base, vit_small, vit_tiny, vit_large, vit_giant2
+from .models import vit_base, vit_small, vit_tiny, vit_large, vit_giant2, dino_head
 from src.methods.dinov2.ibot_loss import iBOTPatchLoss
-from src.methods.ibot.models import projection_head
 from src.methods.dinov2.dino_loss import DINOLoss
 from src.koleo_loss import KoLeoLoss
 from src.datasets import datasets
@@ -210,11 +209,11 @@ class DINOv2():
                     loss_dict["dino_global_crops_loss"] = dino_global_crops_loss
 
                     # accumulate loss
-                    loss_accumulator += self.dino_loss_weight * dino_global_crops_loss
+                    loss_accumulator += self.optimization_dino_loss_weight * dino_global_crops_loss
 
                     student_cls_tokens = student_global_cls_tokens
 
-                    koleo_loss = self.cfg.dino.koleo_loss_weight * sum(
+                    koleo_loss = self.optimization_koleo_loss_weight * sum(
                         self.koleo_loss(p) for p in student_cls_tokens.chunk(2)
                     )  # we don't apply koleo loss between cls tokens of a same image
                     loss_accumulator += koleo_loss
@@ -239,7 +238,7 @@ class DINOv2():
                     loss_dict["ibot_loss"] = ibot_patch_loss / 2
 
                     # accumulate loss
-                    loss_accumulator += self.ibot_loss_weight * ibot_patch_loss
+                    loss_accumulator += self.optimization_ibot_loss_weight * ibot_patch_loss
                 
                 total_loss = loss_accumulator
                 batch_size = global_crops.shape[0] // self.data_global_views_num
@@ -560,48 +559,40 @@ class DINOv2():
                 self.encoder = vit_giant2(drop_path_rate=self.meta_drop_path_rate, num_register_tokens=self.optimization_num_register_tokens, patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
                 self.target_encoder = vit_giant2(num_register_tokens=self.optimization_num_register_tokens, patch_size=self.meta_patch_size)
 
-        self.projection_head_cls = projection_head(
+        self.projection_head_cls = dino_head(
             in_dim=self.encoder.get_embed_dim(),
             out_dim=self.meta_projection_head_dino_output_dim,
             use_bn=self.meta_projection_head_dino_use_bn,
-            norm_last_layer=self.meta_projection_head_dino_norm_last_layer,
             nlayers=self.meta_projection_head_dino_n_layers,
             hidden_dim=self.meta_projection_head_dino_hidden_dim,
             bottleneck_dim=self.meta_projection_head_dino_bottleneck_dim,
-            use_checkpoint=self.meta_checkpoint,
         )
 
-        self.projection_head_patch = projection_head(
+        self.projection_head_patch = dino_head(
             in_dim=self.encoder.get_embed_dim(),
             out_dim=self.meta_projection_head_ibot_output_dim,
             use_bn=self.meta_projection_head_ibot_use_bn,
-            norm_last_layer=self.meta_projection_head_ibot_norm_last_layer,
             nlayers=self.meta_projection_head_ibot_n_layers,
             hidden_dim=self.meta_projection_head_ibot_hidden_dim,
             bottleneck_dim=self.meta_projection_head_ibot_bottleneck_dim,
-            use_checkpoint=self.meta_checkpoint,
         )
         
-        self.target_projection_head_cls = projection_head(
+        self.target_projection_head_cls = dino_head(
             in_dim=self.encoder.get_embed_dim(),
             out_dim=self.meta_projection_head_dino_output_dim,
             use_bn=self.meta_projection_head_dino_use_bn,
-            norm_last_layer=self.meta_projection_head_dino_norm_last_layer,
             nlayers=self.meta_projection_head_dino_n_layers,
             hidden_dim=self.meta_projection_head_dino_hidden_dim,
             bottleneck_dim=self.meta_projection_head_dino_bottleneck_dim,
-            use_checkpoint=self.meta_checkpoint,
         )
 
-        self.target_projection_head_patch = projection_head(
+        self.target_projection_head_patch = dino_head(
             in_dim=self.encoder.get_embed_dim(),
             out_dim=self.meta_projection_head_ibot_output_dim,
             use_bn=self.meta_projection_head_ibot_use_bn,
-            norm_last_layer=self.meta_projection_head_ibot_norm_last_layer,
             nlayers=self.meta_projection_head_ibot_n_layers,
             hidden_dim=self.meta_projection_head_ibot_hidden_dim,
             bottleneck_dim=self.meta_projection_head_ibot_bottleneck_dim,
-            use_checkpoint=self.meta_checkpoint,
         )
 
         if self.meta_pretrained_weights is not None:
@@ -689,13 +680,11 @@ class DINOv2():
         self.meta_projection_head_dino_bottleneck_dim = int(self.config['meta']['projection_head_dino']['bottleneck_dim'])
         self.meta_projection_head_dino_output_dim = int(self.config['meta']['projection_head_dino']['output_dim'])
         self.meta_projection_head_dino_use_bn = bool(self.config['meta']['projection_head_dino']['use_bn'])
-        self.meta_projection_head_dino_norm_last_layer = bool(self.config['meta']['projection_head_dino']['norm_last_layer'])
         self.meta_projection_head_dino_n_layers = int(self.config['meta']['projection_head_dino']['n_layers'])
         self.meta_projection_head_ibot_hidden_dim = int(self.config['meta']['projection_head_ibot']['hidden_dim'])
         self.meta_projection_head_ibot_bottleneck_dim = int(self.config['meta']['projection_head_ibot']['bottleneck_dim'])
         self.meta_projection_head_ibot_output_dim = int(self.config['meta']['projection_head_ibot']['output_dim'])
         self.meta_projection_head_ibot_use_bn = bool(self.config['meta']['projection_head_ibot']['use_bn'])
-        self.meta_projection_head_ibot_norm_last_layer = bool(self.config['meta']['projection_head_ibot']['norm_last_layer'])
         self.meta_projection_head_ibot_n_layers = int(self.config['meta']['projection_head_ibot']['n_layers'])
         self.meta_mask_ratio = list(map(float, self.config['meta']['mask_ratio']))
         self.meta_mask_probability = float(self.config['meta']['mask_probability'])

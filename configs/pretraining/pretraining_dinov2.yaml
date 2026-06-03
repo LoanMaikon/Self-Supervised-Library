@@ -3,7 +3,7 @@ mode: dinov2
 data:
   datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 16
+  batch_size: 128 # 2 gpus = 256
   num_workers: 32
   prefetch_factor: 1
   pin_memory: false
@@ -51,14 +51,12 @@ meta:
     bottleneck_dim: 256
     output_dim: 65536
     use_bn: false
-    norm_last_layer: false
     n_layers: 3
   projection_head_ibot:
     hidden_dim: 2048
     bottleneck_dim: 256
     output_dim: 65536
     use_bn: false
-    norm_last_layer: false
     n_layers: 3
   mask_ratio:
     - 0.1
@@ -72,7 +70,7 @@ optimization:
     - 1.0
   lr:
     - 0.00001
-    - 0.0001
+    - 0.001
     - 0.000001
   weight_decay:
     - 0.04
@@ -90,12 +88,12 @@ optimization:
     - 0.1
   temperature_teacher_cls:
     - 0.04
-    - 0.04
-    - 0.04
+    - 0.07
+    - 0.07
   temperature_teacher_patch:
     - 0.04
-    - 0.04
-    - 0.04
+    - 0.07
+    - 0.07
   temperature_warmup: 30
   dino_loss_weight: 1.0
   ibot_loss_weight: 1.0

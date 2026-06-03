@@ -172,7 +172,7 @@ class DINOv2():
                     ]
 
                     _attn_bias, cat_inputs = fmha.BlockDiagonalMask.from_tensor_list(inputs_for_student_head_list)
-                    outputs_list = _attn_bias.split(self.projection_head_cls(cat_inputs))
+                    outputs_list = _attn_bias.split(self.projection_head_cls(cat_inputs)) ##### NEED TO FIX THE PROJECTION HEAD, GET ORIGINAL FROM DINOV2
 
                     # 3a: local crops cls tokens
                     student_local_cls_tokens_after_head = outputs_list.pop(0).squeeze(0)

@@ -21,7 +21,6 @@ import torch.utils.checkpoint
 from torch.nn.init import trunc_normal_
 
 #######################################################################################################
-#from dinov2.layers import Mlp, PatchEmbed, SwiGLUFFNFused, MemEffAttention, NestedTensorBlock
 
 from xformers.ops import memory_efficient_attention, unbind, fmha, scaled_index_add, index_select_cat
 from torch import nn, Tensor
@@ -375,22 +374,22 @@ class NestedTensorBlock(Block):
         if self.training and self.sample_drop_ratio > 0.0:
 
             def attn_residual_func(x: Tensor, attn_bias=None) -> Tensor:
-                return self.attn(self.norm1(x), attn_bias=attn_bias)
+                return self.ls1(self.attn(self.norm1(x), attn_bias=attn_bias))
 
             def ffn_residual_func(x: Tensor, attn_bias=None) -> Tensor:
-                return self.mlp(self.norm2(x))
+                return self.ls2(self.mlp(self.norm2(x)))
 
             x_list = drop_add_residual_stochastic_depth_list(
                 x_list,
                 residual_func=attn_residual_func,
                 sample_drop_ratio=self.sample_drop_ratio,
-                scaling_vector=self.ls1.gamma if isinstance(self.ls1, LayerScale) else None,
+                scaling_vector=None,
             )
             x_list = drop_add_residual_stochastic_depth_list(
                 x_list,
                 residual_func=ffn_residual_func,
                 sample_drop_ratio=self.sample_drop_ratio,
-                scaling_vector=self.ls2.gamma if isinstance(self.ls1, LayerScale) else None,
+                scaling_vector=None,
             )
             return x_list
         else:

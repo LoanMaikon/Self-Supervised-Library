@@ -88,10 +88,10 @@ This also allows you to experiment original models with custom datasets.
 | I-JEPA | ViT-B | 100 | 256 | 47.49 | Warmup: 15; EMA: 0.996 / 1.0; lr: 1e-4 / 1e-3 / 1e-6; wd: 0.04 / 0.4 |
 | I-JEPA | ViT-B | 100 | 256 | 50.41 | Warmup: 15; EMA: 0.996 / 1.0; lr: 1e-4 / 5e-3 / 1e-6; scheduler set for 600 epochs, stopped at 100 epochs; wd: 0.04 / 0.4 |
 | I-JEPA | ViT-B | 100 | 256 | 58.22 | Warmup: 15; EMA: 0.9995 / 1.0; lr: 1e-4 / 1e-3 / 1e-6; scheduler set for 600 epochs, stopped at 100 epochs; wd: 0.04 / 0.4 |
-| MAE | ViT-B | 400 | 256 | 50.31 | Scheduler set to 800 epochs, stopped at 400 epochs; lr: 1e-5 / 3e-5 / 0; wd: 0.5; warmup: 40 |
-| MAE | ViT-B | 800 | 256 | 54.27 | lr: 1e-5 / 3e-5 / 0; wd: 0.5; warmup: 40 |
-| Barlow Twins | ResNet-50 | 100 | 256 | 56.12 | lr_weights: 1e-4 / 0.4 / 0; lr_biases: 1e-6 / 0.0096 / 0; warmup: 10; schedulers set to 1000 epochs, stopped at 100 |
-| VICReg | ResNet-50 | 100 | 256 | 63.84 | lr: 1e-4 / 0.4 / 0.002; warmup: 10; schedulers set to 1000 epochs, stopped at 100 |
+| MAE | ViT-B | 400 | 512 | 50.31 | Scheduler set to 800 epochs, stopped at 400 epochs; lr: 1e-5 / 3e-5 / 0; wd: 0.5; warmup: 40 |
+| MAE | ViT-B | 800 | 512 | 54.27 | lr: 1e-5 / 3e-5 / 0; wd: 0.5; warmup: 40 |
+| Barlow Twins | ResNet-50 | 100 | 512 | 56.12 | lr_weights: 1e-4 / 0.4 / 0; lr_biases: 1e-6 / 0.0096 / 0; warmup: 10; schedulers set to 1000 epochs, stopped at 100 |
+| VICReg | ResNet-50 | 100 | 512 | 63.84 | lr: 1e-4 / 0.4 / 0.002; warmup: 10; schedulers set to 1000 epochs, stopped at 100 |
 
 The full training runs and additional experiments with different hyperparameter configurations can be found [here](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library).
 

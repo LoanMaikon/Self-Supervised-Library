@@ -108,7 +108,7 @@ class DINOv2():
                 n_local_crops_loss_terms = max(self.data_local_views_num * self.data_global_views_num, 1)
                 n_global_crops_loss_terms = (self.data_global_views_num - 1) * self.data_global_views_num
 
-                with torch.amp.autocast(device_type=self.device.type, enabled=False):
+                with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     with torch.no_grad(): # Teacher outputs
                         x, n_global_crops_teacher = global_crops, self.data_global_views_num
                         teacher_backbone_output_dict = self.target_encoder(x, is_training=True)

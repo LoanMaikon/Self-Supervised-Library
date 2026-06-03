@@ -775,8 +775,6 @@ class Evaluation():
 
         __try_load_models(load_weights=True)
 
-        print(self.model_type)
-
         self.linear_head = LinearHead(self.encoder.get_eval_output_dim(), self.train_dataset.get_num_classes(), batch_norm=self.meta_bn_on_classifier).to(self.device)
         self.linear_head.unfreeze()
             
@@ -792,12 +790,6 @@ class Evaluation():
         self.encoder.to(self.device)
         self.linear_head.to(self.device)
 
-        if self.world_size > 1:
-            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
-            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
-            self.linear_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.linear_head)
-            self.linear_head = DDP(self.linear_head, device_ids=[self.rank], output_device=self.rank)
-        
         match self.meta_mode:
             case "linear_eval":
                 self.encoder.freeze()
@@ -807,6 +799,14 @@ class Evaluation():
         
             case _:
                 raise ValueError(f"Unsupported mode: {self.meta_mode}")
+
+        if self.world_size > 1:
+            if self.meta_mode != "linear_eval":
+                self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+                self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+
+            self.linear_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.linear_head)
+            self.linear_head = DDP(self.linear_head, device_ids=[self.rank], output_device=self.rank)
 
     def _load_transform(self):
         self.train_transform = v2.Compose([

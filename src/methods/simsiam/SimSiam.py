@@ -167,15 +167,14 @@ class SimSiam():
                 decay_params = []
                 no_decay_params = []
 
-                for module in self.model.modules():
-                    for name, p in module.named_parameters():
-                        if not p.requires_grad:
-                            continue
+                for name, p in self.model.named_parameters():
+                    if not p.requires_grad:
+                        continue
 
-                        if p.ndim > 1:
-                            decay_params.append(p)
-                        else:
-                            no_decay_params.append(p)
+                    if p.ndim > 1:
+                        decay_params.append(p)
+                    else:
+                        no_decay_params.append(p)
 
                 param_groups = [
                     {
@@ -258,7 +257,7 @@ class SimSiam():
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
                 self.model.load_weights(
-                    weight_path=os.path.join(self.output_folder, "models", "encoder.pth"),
+                    weight_path=os.path.join(self.output_folder, "models", "model.pth"),
                     device=self.device
                 )
             else:
@@ -307,3 +306,5 @@ class SimSiam():
         self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
         self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
+
+        self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

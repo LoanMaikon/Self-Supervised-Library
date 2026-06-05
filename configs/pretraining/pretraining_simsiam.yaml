@@ -1,4 +1,4 @@
-mode: simclr
+mode: simsiam
 
 data:
   datasets_path: /home/lmk22/datasets

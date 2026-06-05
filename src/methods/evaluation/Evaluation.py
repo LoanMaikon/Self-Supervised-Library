@@ -9,6 +9,7 @@ import json
 import os
 
 from src.methods.byol.resnet import resnet50 as byol_resnet50, resnet200 as byol_resnet200
+from src.methods.simsiam.models import resnet50 as simsiam_resnet50
 from src.methods.simclr.resnet import resnet50 as simclr_resnet50
 from src.methods.swav.resnet import resnet50 as swav_resnet50
 from src.methods.ijepa.models import vit_tiny as ijepa_vit_tiny, vit_small as ijepa_vit_small, vit_base as ijepa_vit_base, \
@@ -765,6 +766,15 @@ class Evaluation():
                         return
                     except Exception as e:
                         errors.append(("vicreg_resnet50x5", str(e)))
+                
+                case "simsiam":
+                    try:
+                        self.encoder = simsiam_resnet50(use_checkpoint=self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
+                        self.model_type = "simsiam_resnet50"
+                        return
+                    except Exception as e:
+                        errors.append(("simsiam_resnet50", str(e)))
 
                 case _:
                     errors.append(("unknown_framework", f"Unsupported framework: {self.meta_framework}"))

@@ -22,6 +22,7 @@ The following self-supervised methods are currently available:
 - DINOv2
 - Barlow Twins
 - VICReg
+- SimSiam
 
 This library aims to provide:
 

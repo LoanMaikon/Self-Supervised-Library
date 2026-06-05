@@ -5,6 +5,7 @@ import os
 
 from src.methods.barlow_twins.BarlowTwins import BarlowTwins
 from src.methods.evaluation.Evaluation import Evaluation
+from src.methods.simsiam.SimSiam import SimSiam
 from src.methods.dinov1.DINOv1 import DINOv1
 from src.methods.dinov2.DINOv2 import DINOv2
 from src.methods.simclr.SimCLR import SimCLR
@@ -180,6 +181,16 @@ class Model():
             
             case "vicreg":
                 self.method = VICReg(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    continue_training=self.continue_training,
+                )
+            
+            case "simsiam":
+                self.method = SimSiam(
                     opened_config=self.config,
                     output_folder=self.output_folder,
                     device=self.device,

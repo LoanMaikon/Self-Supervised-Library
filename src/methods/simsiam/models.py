@@ -120,7 +120,6 @@ class SimSiam(nn.Module):
         )
 
     def eval_forward(self, x):
-        assert self.encoder.fc == nn.Identity(), "You must call remove_classifier_head() before using eval_forward()"
         return self.encoder(x)
 
     def get_eval_output_dim(self):

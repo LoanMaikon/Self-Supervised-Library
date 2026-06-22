@@ -109,7 +109,7 @@ class SimSiam(nn.Module):
         
         try:
             self.remove_classifier_head()
-            self.load_state_dict(clean_state_dict, strict=False)
+            self.load_state_dict(clean_state_dict)
             return
         except Exception as e:
             errors.append(("simsiam_no_head", str(e)))

@@ -14,6 +14,7 @@ from src.methods.ijepa.IJEPA import IJEPA
 from src.methods.swav.SwAV import SwAV
 from src.methods.byol.BYOL import BYOL
 from src.methods.ibot.iBOT import iBOT
+from src.methods.msn.MSN import MSN
 from src.methods.mae.MAE import MAE
 
 from src.utils import is_main_process
@@ -191,6 +192,16 @@ class Model():
             
             case "simsiam":
                 self.method = SimSiam(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    continue_training=self.continue_training,
+                )
+            
+            case "msn":
+                self.method = MSN(
                     opened_config=self.config,
                     output_folder=self.output_folder,
                     device=self.device,

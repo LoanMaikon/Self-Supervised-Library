@@ -1,17 +1,20 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
+import torch.optim as optim
 import torch.nn as nn
 import numpy as np
 import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
-from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
+    recreate_csv_log, get_last_epoch, load_last_values, AllReduceSum
+from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
+    LinearWarmupTemperatureSchedule
 from src.datasets import datasets
-from .models import deit_tiny, deit_small, deit_small_p8, deit_small_p7, vitc_4gf, deit_small_convstem, \
+from .models import deit_tiny, deit_small, deit_small_p8, deit_small_p7, vitc_4gf, deit_small_convstem, projection_head, \
     deit_base_p8, deit_base_p7, deit_base_p4, deit_base, deit_large_p7, deit_large_p8, deit_large, deit_huge, deit_huge_p8, deit_huge_p7, deit_huge_p10
+from .msn_loss import init_msn_loss
 
 class MSN():
     def __init__(self,
@@ -36,8 +39,15 @@ class MSN():
         self._load_dataloader()
         self._load_optimizer()
         self._load_schedulers()
+        self._load_prototypes()
 
         self.scaler = torch.amp.GradScaler()
+        self.msn_loss = init_msn_loss(
+            num_views=self.data_global_views_num + self.data_local_views_num,
+            tau=self.optimization_temperature_anchor[0],
+            me_max=True,
+            return_preds=True
+        )
 
         self.train_loss = []
         self.lr_values = []
@@ -51,31 +61,426 @@ class MSN():
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "wd_scheduler.pth"), map_location=self.device))
             self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "ema_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
+            self.prototypes.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "prototypes.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
     def train(self):
-        pass
+        write_on_log("Starting training...", self.output_folder)
+
+        self.proto_labels = self.one_hot(torch.tensor([i for i in range(self.optimization_num_prototypes)]), self.optimization_num_prototypes)
+
+        for epoch in range(1, self.optimization_epochs + 1):
+            if self.continue_training and epoch <= self.last_epoch:
+                continue
+
+            write_on_log(f"Epoch {epoch}/{self.optimization_epochs}", self.output_folder)
+            self.train_sampler.set_epoch(epoch)
+
+            self.train_loss.append(0.0)
+            num_samples = 0
+
+            self.prototypes.requires_grad = True if epoch > self.optimization_freeze_prototypes_epochs else False
+
+            for iteration, (images, _) in enumerate(self.train_dataloader):
+                self.optimizer.zero_grad()
+
+                images = [img.to(self.device, non_blocking=True) for img in images]
+
+                with torch.amp.autocast(device_type=self.device.type):
+                    h_encoder, _ = self.encoder(images[1:], return_before_head=True, patch_drop=self.data_global_views_mask_ratio)
+                    h_encoder = self.projection_head(h_encoder)
+                    
+                    with torch.no_grad():
+                        h_target, _ = self.target_encoder(images[0], return_before_head=True)
+                        h_target = self.target_projection_head(h_target)
+
+                    anchor_views, target_views = h_encoder, h_target.detach()
+
+                    (ploss, me_max, ent, logs, _) = self.msn_loss(
+                        T=self.target_temp_scheduler.get_current_value(),
+                        use_sinkhorn=self.optimization_use_sinkhorn,
+                        use_entropy=self.optimization_use_entropy,
+                        anchor_views=anchor_views,
+                        target_views=target_views,
+                        proto_labels=self.proto_labels,
+                        prototypes=self.prototypes,
+                    )
+
+                    loss = ploss + self.optimization_memax_regularization_weight*me_max + self.optimization_entropy_regularization_weight*ent if self.optimization_use_entropy else ploss + self.optimization_memax_regularization_weight*me_max
+
+                    loss_value = loss
+                    self.train_loss[-1] += loss_value * images[0].size(0)
+                    num_samples += images[0].size(0)
+
+                self.scaler.scale(loss).backward()
+                with torch.no_grad():
+                    self.prototypes.grad.data = AllReduceSum.apply(self.prototypes.grad.data)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+
+                self.lr_values.append(self.lr_scheduler.get_value())
+                self.wd_values.append(self.wd_scheduler.get_value())
+                self.ema_values.append(self.ema_scheduler.get_value())
+                write_on_csv(self.output_folder, epoch, iteration, loss_value, self.lr_values[-1], self.wd_values[-1], self.ema_values[-1])
+
+                self.update_target_network(self.ema_scheduler.get_value())
+
+                self.lr_scheduler.step()
+                self.wd_scheduler.step()
+                self.ema_scheduler.step()
+                self.student_temp_scheduler.step()
+                self.target_temp_scheduler.step()
+            
+            self.train_loss[-1] /= num_samples
+
+            self.save_models(epoch)
+
+            write_on_log(f"Loss: {self.train_loss[-1]}", self.output_folder)
+
+            plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
+            plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
+            plot_fig(range(len(self.ema_values)), "Iteration", self.ema_values, "EMA", f"ema", self.output_folder)
+            
+            save_json({"train_loss": self.train_loss}, self.output_folder, "training_info")
+            save_json({"last_epoch": epoch}, self.output_folder, "last_epoch")
+
+            write_on_log("", self.output_folder)     
 
     def save_models(self, epoch):
-        pass
+        if not is_main_process():
+            return
+        
+        os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
+        
+        encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
+        projection_head_state_dict = self.projection_head.module.state_dict() if self.world_size > 1 else self.projection_head.state_dict()
+        target_encoder_state_dict = self.target_encoder.state_dict()
+        target_projection_head_state_dict = self.target_projection_head.state_dict()
+        optimizer_state_dict = self.optimizer.state_dict()
+        lr_scheduler_state_dict = self.lr_scheduler.state_dict()
+        wd_scheduler_state_dict = self.wd_scheduler.state_dict()
+        ema_scheduler_state_dict = self.ema_scheduler.state_dict()
+        scaler_state_dict = self.scaler.state_dict()
+        student_temp_scheduler_state_dict = self.student_temp_scheduler.state_dict()
+        target_temp_scheduler_state_dict = self.target_temp_scheduler.state_dict()
+        prototypes_state_dict = self.prototypes.state_dict()
+
+        torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_last.pth"))
+        torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head_last.pth"))
+        torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder_last.pth"))
+        torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", f"target_projection_head_last.pth"))
+        torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_last.pth"))
+        torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_last.pth"))
+        torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_last.pth"))
+        torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_last.pth"))
+        torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_last.pth"))
+        torch.save(student_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"student_temp_scheduler_last.pth"))
+        torch.save(target_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"target_temp_scheduler_last.pth"))
+        torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", f"prototypes_last.pth"))
+        
+        if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
+            torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder.pth"))
+            torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head.pth"))
+            torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder.pth"))
+            torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", f"target_projection_head.pth"))
+            torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer.pth"))
+            torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler.pth"))
+            torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler.pth"))
+            torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler.pth"))
+            torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler.pth"))
+            torch.save(student_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"student_temp_scheduler.pth"))
+            torch.save(target_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"target_temp_scheduler.pth"))
+            torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", f"prototypes.pth"))
+
+    def update_target_network(self, ema):
+        with torch.no_grad():
+            for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+                param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
+
+            for param_q, param_k in zip(self.projection_head.parameters(), self.target_projection_head.parameters()):
+                param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
+
+    def one_hot(self, targets, num_classes, smoothing=0.0):
+        off_value = smoothing / num_classes
+        on_value = 1. - smoothing + off_value
+        targets = targets.long().view(-1, 1).to(self.device)
+        return torch.full((len(targets), num_classes), off_value, device=self.device).scatter_(1, targets, on_value)
+
+    def _load_prototypes(self):
+        prototypes = torch.empty((self.optimization_num_prototypes, self.meta_projection_head_output_dim))
+        _sqrt_k = (1./self.meta_projection_head_output_dim)**0.5
+        torch.nn.init.uniform_(prototypes, -_sqrt_k, _sqrt_k)
+        self.prototypes = torch.nn.parameter.Parameter(prototypes).to(self.device)
+        self.prototypes.requires_grad = True
 
     def _load_schedulers(self):
-        pass
+        self.lr_scheduler = WarmupCosineSchedule(
+            optimizer=self.optimizer,
+            warmup_steps=self.optimization_warmup_epochs * len(self.train_dataloader),
+            start_lr=self.optimization_lr[0],
+            middle_lr=self.optimization_lr[1],
+            final_lr=self.optimization_lr[2],
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
+
+        self.wd_scheduler = CosineWDSchedule(
+            optimizer=self.optimizer,
+            start_wd=self.optimization_weight_decay[0],
+            final_wd=self.optimization_weight_decay[1],
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
+
+        self.ema_scheduler = EMACosineSchedule(
+            start_ema=self.optimization_ema[0],
+            final_ema=self.optimization_ema[1],
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
+
+        self.student_temp_scheduler = LinearWarmupTemperatureSchedule(
+            start_temp=self.optimization_temperature_anchor[0],
+            middle_temp=self.optimization_temperature_anchor[1],
+            final_temp=self.optimization_temperature_anchor[2],
+            warmup_steps=self.optimization_tempereature_warmup * len(self.train_dataloader),
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
+
+        self.target_temp_scheduler = LinearWarmupTemperatureSchedule(
+            start_temp=self.optimization_temperature_target[0],
+            middle_temp=self.optimization_temperature_target[1],
+            final_temp=self.optimization_temperature_target[2],
+            warmup_steps=self.optimization_tempereature_warmup * len(self.train_dataloader),
+            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+        )
     
     def _load_optimizer(self):
-        pass
+        match self.optimization_optimizer:
+            case "adamw":
+                target_modules = [self.encoder, self.projection_head] if self.world_size == 1 else [self.encoder.module, self.projection_head.module]
+
+                decay_params = []
+                no_decay_params = []
+
+                for module in target_modules:
+                    for name, p in module.named_parameters():
+                        if not p.requires_grad:
+                            continue
+
+                        if p.ndim > 1 and "bias" not in name:
+                            decay_params.append(p)
+                        else:
+                            no_decay_params.append(p)
+
+                param_groups = [
+                    {
+                        "params": decay_params,
+                        "weight_decay": self.optimization_weight_decay[0],
+                        "WD_exclude": False
+                    },
+                    {
+                        "params": no_decay_params,
+                        "weight_decay": 0.0,
+                        "WD_exclude": True
+                    },
+                ]
+
+                self.optimizer = optim.AdamW(
+                    param_groups,
+                    lr=self.optimization_lr[0],
+                )
+
+            case _:
+                raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
 
     def _load_dataloader(self):
-        pass
+        self.train_dataset = datasets(
+            operation="train",
+            datasets_folder_path=self.data_datasets_path,
+            dataset_name=self.data_train_dataset,
+            separate_val_subset=self.data_separate_val_subset_use,
+            val_size=self.data_separate_val_subset_size,
+            transforms=[self.transform_global, self.transform_focal],
+            times=[self.data_global_views_num, self.data_local_views_num]
+        )
+
+        self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)
+
+        self.train_dataloader = torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_size=self.data_batch_size,
+            sampler=self.train_sampler,
+            num_workers=self.data_num_workers,
+            prefetch_factor=self.data_prefetch_factor,
+            pin_memory=self.data_pin_memory,
+            drop_last=self.data_drop_last
+        )
 
     def _load_transform(self):
-        pass
+        # Pseudo code of Apendix A from SimCLR paper
+        def __get_color_distortion(strength=0.5):
+            collor_jitter = v2.ColorJitter(0.8 * strength, 0.8 * strength, 0.8 * strength, 0.2 * strength)
+            rnd_color_jitter = v2.RandomApply([collor_jitter], p=0.8)
+            rnd_gray = v2.RandomGrayscale(p=0.2)
+
+            return v2.Compose([rnd_color_jitter, rnd_gray])
+
+        self.transform_global = v2.Compose([
+            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio)),
+            v2.RandomHorizontalFlip(p=0.5) if self.data_global_views_horizontal_flip else v2.RandomHorizontalFlip(p=0.0),
+            __get_color_distortion(strength=0.5) if self.data_global_views_color_jitter else v2.Identity(),
+            v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0)) if self.data_global_views_gaussian_blur else v2.Identity(),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
+        ])
+
+        self.transform_focal = v2.Compose([
+            v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio)),
+            v2.RandomHorizontalFlip(p=0.5) if self.data_local_views_horizontal_flip else v2.RandomHorizontalFlip(p=0.0),
+            __get_color_distortion(strength=0.5) if self.data_local_views_color_jitter else v2.Identity(),
+            v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0)) if self.data_local_views_gaussian_blur else v2.Identity(),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
+        ])
 
     def _load_models(self):
-        pass
+        match self.meta_model_name:
+            case "vit_tiny":
+                self.encoder = deit_tiny(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
+                self.target_encoder = deit_tiny(patch_size=self.meta_patch_size)
+            
+            case "vit_small":
+                self.encoder = deit_small(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
+                self.target_encoder = deit_small(patch_size=self.meta_patch_size)
+
+            case "vit_base":
+                self.encoder = deit_base(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
+                self.target_encoder = deit_base(patch_size=self.meta_patch_size)
+            
+            case "vit_large":
+                self.encoder = deit_large(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
+                self.target_encoder = deit_large(patch_size=self.meta_patch_size)
+
+            case "vit_huge":
+                self.encoder = deit_huge(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
+                self.target_encoder = deit_huge(patch_size=self.meta_patch_size)
+        
+        self.projection_head = projection_head(
+            in_dim=self.encoder.get_embed_dim(),
+            hidden_dim=self.meta_projection_head_hidden_dim,
+            out_dim=self.meta_projection_head_output_dim,
+            use_bn=self.meta_projection_head_use_bn,
+            norm_last_layer=self.meta_projection_head_norm_last_layer,
+            nlayers=self.meta_projection_head_n_layers
+        )
+
+        self.target_projection_head = projection_head(
+            in_dim=self.encoder.get_embed_dim(),
+            hidden_dim=self.meta_projection_head_hidden_dim,
+            out_dim=self.meta_projection_head_output_dim,
+            use_bn=self.meta_projection_head_use_bn,
+            norm_last_layer=self.meta_projection_head_norm_last_layer,
+            nlayers=self.meta_projection_head_n_layers,
+        )
+
+        if self.meta_pretrained_weights is not None:
+            if os.path.exists(self.meta_pretrained_weights):
+                self.encoder.load_weights(
+                    weight_path=self.meta_pretrained_weights,
+                    device=self.device
+                )
+            else:
+                raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
+        
+        self.target_encoder.load_state_dict(self.encoder.state_dict())
+        self.target_projection_head.load_state_dict(self.projection_head.state_dict())
+
+        if self.continue_training:
+            if os.path.exists(os.path.join(self.output_folder, "models")):
+                self.encoder.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"encoder.pth"), map_location=self.device))
+                self.target_encoder.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_encoder.pth"), map_location=self.device))
+                self.projection_head.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"projection_head.pth"), map_location=self.device))
+                self.target_projection_head.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_projection_head.pth"), map_location=self.device))
+            else:
+                raise FileNotFoundError(f"Model checkpoint files not found in {os.path.join(self.output_folder, 'models')}.")
+
+        self.encoder.to(self.device)
+        self.target_encoder.to(self.device)
+        self.projection_head.to(self.device)
+        self.target_projection_head.to(self.device)
+
+        self.encoder.unfreeze()
+        self.target_encoder.freeze()
+        self.projection_head.unfreeze()
+        self.target_projection_head.freeze()
+
+        if self.world_size > 1:
+            self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
+
+            self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
+        
+        self.encoder.train()
+        self.target_encoder.train()
+        self.projection_head.train()
+        self.target_projection_head.train()
 
     def _load_config(self):
-        pass
+        self.data_datasets_path =  str(self.config["data"]["datasets_path"])
+        self.data_train_dataset = str(self.config["data"]["train_dataset"])
+        self.data_batch_size = int(self.config["data"]["batch_size"])
+        self.data_num_workers = int(self.config["data"]["num_workers"])
+        self.data_prefetch_factor = int(self.config["data"]["prefetch_factor"])
+        self.data_pin_memory = bool(self.config["data"]["pin_memory"])
+        self.data_drop_last = bool(self.config["data"]["drop_last"])
+        self.data_global_views_num = int(self.config["data"]["global_views"]["num"])
+        self.data_global_views_crop_scale = list(self.config["data"]["global_views"]["crop_scale"])
+        self.data_global_views_crop_ratio = list(self.config["data"]["global_views"]["crop_ratio"])
+        self.data_global_views_color_jitter = bool(self.config["data"]["global_views"]["color_jitter"])
+        self.data_global_views_gaussian_blur = bool(self.config["data"]["global_views"]["gaussian_blur"])
+        self.data_global_views_horizontal_flip = bool(self.config["data"]["global_views"]["horizontal_flip"])
+        self.data_global_views_crop_size = int(self.config["data"]["global_views"]["crop_size"])
+        self.data_global_views_mask_ratio = float(self.config["data"]["global_views"]["mask_ratio"])
+        self.data_local_views_num = int(self.config["data"]["local_views"]["num"])
+        self.data_local_views_crop_scale = list(self.config["data"]["local_views"]["crop_scale"])
+        self.data_local_views_crop_ratio = list(self.config["data"]["local_views"]["crop_ratio"])
+        self.data_local_views_color_jitter = bool(self.config["data"]["local_views"]["color_jitter"])
+        self.data_local_views_gaussian_blur = bool(self.config["data"]["local_views"]["gaussian_blur"])
+        self.data_local_views_horizontal_flip = bool(self.config["data"]["local_views"]["horizontal_flip"])
+        self.data_local_views_crop_size = int(self.config["data"]["local_views"]["crop_size"])
+
+        self.meta_model_name = str(self.config["meta"]["model_name"])
+        self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
+        self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
+        self.meta_save_every = int(self.config["meta"]["save_every"])
+        self.meta_patch_size = int(self.config["meta"]["patch_size"])
+        self.meta_projection_head_hidden_dim = int(self.config["meta"]["projection_head"]["hidden_dim"])
+        self.meta_projection_head_output_dim = int(self.config["meta"]["projection_head"]["output_dim"])
+        self.meta_projection_head_use_bn = bool(self.config["meta"]["projection_head"]["use_bn"])
+        self.meta_projection_head_norm_last_layer = bool(self.config["meta"]["projection_head"]["norm_last_layer"])
+        self.meta_projection_head_n_layers = int(self.config["meta"]["projection_head"]["n_layers"])
+
+        self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
+        self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))
+        self.optimization_weight_decay = list(map(float, self.config["optimization"]["weight_decay"]))
+        self.optimization_ema = list(map(float, self.config["optimization"]["ema"]))
+        self.optimization_temperature_anchor = list(map(float, self.config["optimization"]["temperature_anchor"]))
+        self.optimization_temperature_target = list(map(float, self.config["optimization"]["temperature_target"]))
+        self.optimization_tempereature_warmup = int(self.config["optimization"]["tempereature_warmup"])
+        self.optimization_num_epochs = int(self.config["optimization"]["num_epochs"])
+        self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
+        self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
+        self.optimization_memax_regularization_weight = float(self.config["optimization"]["memax_regularization_weight"])
+        self.optimization_num_prototypes = int(self.config["optimization"]["num_prototypes"])
+        self.optimization_freeze_prototypes_epochs = int(self.config["optimization"]["freeze_prototypes_epochs"])
+        self.optimization_use_sinkhorn = bool(self.config["optimization"]["use_sinkhorn"])
+        self.optimization_drop_path_rate = float(self.config["optimization"]["drop_path_rate"])
+        self.optimization_use_entropy = bool(self.config["optimization"]["use_entropy"])
+        self.optimization_entropy_regularization_weight = float(self.config["optimization"]["entropy_regularization_weight"])
+    
+        self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

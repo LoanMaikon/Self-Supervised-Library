@@ -180,3 +180,20 @@ def repeat_interleave_batch(x, B, repeat):
         for i in range(N)
     ], dim=0)
     return x
+
+class AllReduceSum(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, x):
+        if (
+            dist.is_available()
+            and dist.is_initialized()
+            and (dist.get_world_size() > 1)
+        ):
+            x = x.contiguous()
+            dist.all_reduce(x)
+        return x
+
+    @staticmethod
+    def backward(ctx, grads):
+        return grads

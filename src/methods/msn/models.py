@@ -414,7 +414,7 @@ class VisionTransformer(nn.Module):
         checkpoint = torch.load(weight_path, map_location=device)
 
         state_dict = checkpoint.get("state_dict", checkpoint)
-        state_dict = checkpoint.get("encoder", state_dict)
+        state_dict = checkpoint.get("target_encoder", state_dict)
         
         clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 

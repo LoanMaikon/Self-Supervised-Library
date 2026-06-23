@@ -449,10 +449,6 @@ class ProjectionHead(nn.Module):
     def unfreeze(self):
         for param in self.parameters():
             param.requires_grad = True
-
-    def cancel_gradients_last_layer(self, epoch, freeze_last_layer_epochs):
-        if epoch <= freeze_last_layer_epochs:
-            self.mlp[-1].weight_g.grad = None
     
 def projection_head(in_dim, hidden_dim, out_dim, use_bn, norm_last_layer, n_layers):
     return ProjectionHead(in_dim, hidden_dim, out_dim, use_bn, norm_last_layer, n_layers)

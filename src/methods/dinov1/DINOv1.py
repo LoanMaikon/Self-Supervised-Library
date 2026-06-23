@@ -204,11 +204,14 @@ class DINOv1():
         self.center = torch.zeros(1, self.meta_projection_head_output_dim).to(self.device)
 
     def update_target_network(self, ema):
+        encoder_module = self.encoder.module if self.world_size > 1 else self.encoder
+        proj_module = self.projection_head.module if self.world_size > 1 else self.projection_head
+        
         with torch.no_grad():
-            for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+            for param_q, param_k in zip(encoder_module.parameters(), self.target_encoder.parameters()):
                 param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
-
-            for param_q, param_k in zip(self.projection_head.parameters(), self.target_projection_head.parameters()):
+            
+            for param_q, param_k in zip(proj_module.parameters(), self.target_projection_head.parameters()):
                 param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
 
     def _load_schedulers(self):

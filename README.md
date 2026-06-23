@@ -23,6 +23,7 @@ The following self-supervised methods are currently available:
 - Barlow Twins
 - VICReg
 - SimSiam
+- MSN
 
 This library aims to provide:
 

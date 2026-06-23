@@ -15,61 +15,52 @@ from src.utils import AllReduce
 
 logger = getLogger()
 
+class msn_loss():
+    def __init__(self, num_views=1, me_max=True, return_preds=False):
+        self.num_views = num_views
+        self.me_max = me_max
+        self.return_preds = return_preds
 
-def init_msn_loss(
-    num_views=1,
-    tau=0.1,
-    me_max=True,
-    return_preds=False
-):
-    """
-    Make unsupervised MSN loss
+        self.softmax = torch.nn.Softmax(dim=1)
 
-    :num_views: number of anchor views
-    :param tau: cosine similarity temperature
-    :param me_max: whether to perform me-max regularization
-    :param return_preds: whether to return anchor predictions
-    """
-    softmax = torch.nn.Softmax(dim=1)
-
-    def sharpen(p, T):
+    def sharpen(self, p, T):
         sharp_p = p**(1./T)
         sharp_p /= torch.sum(sharp_p, dim=1, keepdim=True)
         return sharp_p
 
-    def snn(query, supports, support_labels, temp=tau):
+    def snn(self, query, supports, support_labels, temp=0.1):
         """ Soft Nearest Neighbours similarity classifier """
         query = torch.nn.functional.normalize(query)
         supports = torch.nn.functional.normalize(supports)
-        return softmax(query @ supports.T / temp) @ support_labels
+        return self.softmax(query @ supports.T / temp) @ support_labels
 
-    def loss(
+    def compute_loss(
+        self,
         anchor_views,
         target_views,
         prototypes,
         proto_labels,
-        T=0.25,
+        student_temperature,
+        T,
         use_entropy=False,
         use_sinkhorn=False,
-        sharpen=sharpen,
-        snn=snn
     ):
         # Step 1: compute anchor predictions
-        probs = snn(anchor_views, prototypes, proto_labels)
+        probs = self.snn(anchor_views, prototypes, proto_labels, temp=student_temperature)
 
         # Step 2: compute targets for anchor predictions
         with torch.no_grad():
-            targets = sharpen(snn(target_views, prototypes, proto_labels), T=T)
+            targets = self.sharpen(self.snn(target_views, prototypes, proto_labels), T=T)
             if use_sinkhorn:
                 targets = distributed_sinkhorn(targets)
-            targets = torch.cat([targets for _ in range(num_views)], dim=0)
+            targets = torch.cat([targets for _ in range(self.num_views)], dim=0)
 
         # Step 3: compute cross-entropy loss H(targets, queries)
         loss = torch.mean(torch.sum(torch.log(probs**(-targets)), dim=1))
 
         # Step 4: compute me-max regularizer
         rloss = 0.
-        if me_max:
+        if self.me_max:
             avg_probs = AllReduce.apply(torch.mean(probs, dim=0))
             rloss = - torch.sum(torch.log(avg_probs**(-avg_probs))) + math.log(float(len(avg_probs)))
 
@@ -77,20 +68,10 @@ def init_msn_loss(
         if use_entropy:
             sloss = torch.mean(torch.sum(torch.log(probs**(-probs)), dim=1))
 
-        # -- logging
-        with torch.no_grad():
-            num_ps = float(len(set(targets.argmax(dim=1).tolist())))
-            max_t = targets.max(dim=1).values.mean()
-            min_t = targets.min(dim=1).values.mean()
-            log_dct = {'np': num_ps, 'max_t': max_t, 'min_t': min_t}
+        if self.return_preds:
+            return loss, rloss, sloss, targets
 
-        if return_preds:
-            return loss, rloss, sloss, log_dct, targets
-
-        return loss, rloss, sloss, log_dct
-
-    return loss
-
+        return loss, rloss, sloss
 
 @torch.no_grad()
 def distributed_sinkhorn(Q, num_itr=3, use_dist=True):

@@ -22,7 +22,7 @@ from src.methods.ibot.models import vit_base as ibot_vit_base, vit_large as ibot
 from src.methods.barlow_twins.models import Model_barlow_twins as barlow_twins_resnet50
 from src.methods.vicreg.models import resnet50 as vicreg_resnet50, resnet34 as vicreg_resnet34, resnet200x2 as vicreg_resnet200x2, \
     resnet101 as vicreg_resnet101, resnet50x2 as vicreg_resnet50x2, resnet50x4 as vicreg_resnet50x4, resnet50x5 as vicreg_resnet50x5
-from src.methods.msn.models import deit_tiny as msn_deit_tiny, deit_small as msn_deit_small, deit_small_p8 as msn_deit_small_p8, deit_small_p7 as msn_deit_small_p7, vitc_4gf as msn_vitc_4gf, deit_small_convstem as msn_deit_small_convstem, projection_head as msn_projection_head, \
+from src.methods.msn.models import deit_tiny as msn_deit_tiny, deit_small as msn_deit_small, deit_small_p8 as msn_deit_small_p8, deit_small_p7 as msn_deit_small_p7, vitc_4gf as msn_vitc_4gf, deit_small_convstem as msn_deit_small_convstem, \
     deit_base_p8 as msn_deit_base_p8, deit_base_p7 as msn_deit_base_p7, deit_base_p4 as msn_deit_base_p4, deit_base as msn_deit_base, deit_large_p7 as msn_deit_large_p7, deit_large_p8 as msn_deit_large_p8, deit_large as msn_deit_large, deit_huge as msn_deit_huge, deit_huge_p8 as msn_deit_huge_p8, deit_huge_p7 as msn_deit_huge_p7, deit_huge_p10 as msn_deit_huge_p10
 from .resnet50 import resnet50 as resnet50_eval
 

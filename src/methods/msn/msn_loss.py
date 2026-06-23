@@ -7,13 +7,28 @@
 # LICENSE file in the root directory of this source tree.
 #
 
-from logging import getLogger
+
 import torch
 import math
-from src.utils import AllReduce
+import torch.distributed as dist
 
 
-logger = getLogger()
+class AllReduce(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, x):
+        if (
+            dist.is_available()
+            and dist.is_initialized()
+            and (dist.get_world_size() > 1)
+        ):
+            x = x.contiguous() / dist.get_world_size()
+            dist.all_reduce(x)
+        return x
+
+    @staticmethod
+    def backward(ctx, grads):
+        return grads
 
 class msn_loss():
     def __init__(self, num_views=1, me_max=True, return_preds=False):

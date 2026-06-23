@@ -12,7 +12,7 @@ from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_p
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearWarmupTemperatureSchedule
 from src.datasets import datasets
-from .models import deit_tiny, deit_small, deit_small_p8, deit_small_p7, vitc_4gf, deit_small_convstem, projection_head, \
+from .models import deit_tiny, deit_small, deit_small_p8, deit_small_p7, vitc_4gf, deit_small_convstem, \
     deit_base_p8, deit_base_p7, deit_base_p4, deit_base, deit_large_p7, deit_large_p8, deit_large, deit_huge, deit_huge_p8, deit_huge_p7, deit_huge_p10
 from .msn_loss import msn_loss
 
@@ -59,8 +59,11 @@ class MSN():
             self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "lr_scheduler.pth"), map_location=self.device))
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "wd_scheduler.pth"), map_location=self.device))
             self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "ema_scheduler.pth"), map_location=self.device))
+            self.student_temp_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "student_temp_scheduler.pth"), map_location=self.device))
+            self.target_temp_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "target_temp_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
-            self.prototypes.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "prototypes.pth"), map_location=self.device))
+            loaded = torch.load(os.path.join(self.output_folder, "models", "prototypes.pth"), map_location=self.device)
+            self.prototypes = torch.nn.Parameter(loaded.to(self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
@@ -71,11 +74,11 @@ class MSN():
 
         self.proto_labels = self.one_hot(torch.tensor([i for i in range(self.optimization_num_prototypes)]), self.optimization_num_prototypes)
 
-        for epoch in range(1, self.optimization_epochs + 1):
+        for epoch in range(1, self.optimization_num_epochs + 1):
             if self.continue_training and epoch <= self.last_epoch:
                 continue
 
-            write_on_log(f"Epoch {epoch}/{self.optimization_epochs}", self.output_folder)
+            write_on_log(f"Epoch {epoch}/{self.optimization_num_epochs}", self.output_folder)
             self.train_sampler.set_epoch(epoch)
 
             self.train_loss.append(0.0)
@@ -89,18 +92,18 @@ class MSN():
                 images = [img.to(self.device, non_blocking=True) for img in images]
 
                 with torch.amp.autocast(device_type=self.device.type):
-                    h_encoder, _ = self.encoder(images[1:], return_before_head=True, patch_drop=self.data_global_views_mask_ratio)
-                    h_encoder = self.projection_head(h_encoder)
-                    
+                    h_student, z_student = self.encoder(
+                        images[1:], return_before_head=True, patch_drop=self.data_global_views_mask_ratio
+                    )
                     with torch.no_grad():
-                        h_target, _ = self.target_encoder(images[0], return_before_head=True)
-                        h_target = self.target_projection_head(h_target)
+                        h_teacher, _ = self.target_encoder(images[0], return_before_head=True)
 
-                    anchor_views, target_views = h_encoder, h_target.detach()
+                    anchor_views = z_student
+                    target_views = h_teacher.detach()
 
                     (ploss, me_max, ent, _) = self.msn_loss.compute_loss(
-                        T=self.target_temp_scheduler.get_current_value(),
-                        student_temperature=self.student_temp_scheduler.get_current_value(),
+                        T=self.target_temp_scheduler.get_value(),
+                        student_temperature=self.student_temp_scheduler.get_value(),
                         use_sinkhorn=self.optimization_use_sinkhorn,
                         use_entropy=self.optimization_use_entropy,
                         anchor_views=anchor_views,
@@ -117,8 +120,9 @@ class MSN():
 
                 self.scaler.scale(loss).backward()
                 with torch.no_grad():
-                    self.prototypes.grad.data = AllReduceSum.apply(self.prototypes.grad.data)
-                    self.prototypes.grad.data /= self.world_size
+                    if self.prototypes.grad is not None:
+                        self.prototypes.grad.data = AllReduceSum.apply(self.prototypes.grad.data)
+                        self.prototypes.grad.data /= self.world_size
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
 
@@ -158,9 +162,7 @@ class MSN():
         os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
         
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
-        projection_head_state_dict = self.projection_head.module.state_dict() if self.world_size > 1 else self.projection_head.state_dict()
         target_encoder_state_dict = self.target_encoder.state_dict()
-        target_projection_head_state_dict = self.target_projection_head.state_dict()
         optimizer_state_dict = self.optimizer.state_dict()
         lr_scheduler_state_dict = self.lr_scheduler.state_dict()
         wd_scheduler_state_dict = self.wd_scheduler.state_dict()
@@ -168,12 +170,9 @@ class MSN():
         scaler_state_dict = self.scaler.state_dict()
         student_temp_scheduler_state_dict = self.student_temp_scheduler.state_dict()
         target_temp_scheduler_state_dict = self.target_temp_scheduler.state_dict()
-        prototypes_state_dict = self.prototypes.state_dict()
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder.pth"))
-        torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head.pth"))
         torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder.pth"))
-        torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", f"target_projection_head.pth"))
         torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer.pth"))
         torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler.pth"))
         torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler.pth"))
@@ -181,13 +180,11 @@ class MSN():
         torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler.pth"))
         torch.save(student_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"student_temp_scheduler.pth"))
         torch.save(target_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"target_temp_scheduler.pth"))
-        torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", f"prototypes.pth"))
+        torch.save(self.prototypes.detach().cpu(), os.path.join(self.output_folder, "models", "prototypes.pth"))
         
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_{epoch}.pth"))
-            torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head_{epoch}.pth"))
             torch.save(target_encoder_state_dict, os.path.join(self.output_folder, "models", f"target_encoder_{epoch}.pth"))
-            torch.save(target_projection_head_state_dict, os.path.join(self.output_folder, "models", f"target_projection_head_{epoch}.pth"))
             torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_{epoch}.pth"))
             torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_{epoch}.pth"))
             torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_{epoch}.pth"))
@@ -195,17 +192,13 @@ class MSN():
             torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_{epoch}.pth"))
             torch.save(student_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"student_temp_scheduler_{epoch}.pth"))
             torch.save(target_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"target_temp_scheduler_{epoch}.pth"))
-            torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", f"prototypes_{epoch}.pth"))
+            torch.save(self.prototypes.detach().cpu(), os.path.join(self.output_folder, "models", f"prototypes_{epoch}.pth"))
 
     def update_target_network(self, ema):
         encoder_module = self.encoder.module if self.world_size > 1 else self.encoder
-        proj_module = self.projection_head.module if self.world_size > 1 else self.projection_head
         
         with torch.no_grad():
             for param_q, param_k in zip(encoder_module.parameters(), self.target_encoder.parameters()):
-                param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
-            
-            for param_q, param_k in zip(proj_module.parameters(), self.target_projection_head.parameters()):
                 param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
 
     def one_hot(self, targets, num_classes, smoothing=0.0):
@@ -215,11 +208,14 @@ class MSN():
         return torch.full((len(targets), num_classes), off_value, device=self.device).scatter_(1, targets, on_value)
 
     def _load_prototypes(self):
-        prototypes = torch.empty((self.optimization_num_prototypes, self.meta_projection_head_output_dim))
-        _sqrt_k = (1./self.meta_projection_head_output_dim)**0.5
+        prototypes = torch.empty(
+            (self.optimization_num_prototypes, self.meta_projection_head_output_dim),
+            device=self.device
+        )
+        _sqrt_k = (1. / self.meta_projection_head_output_dim) ** 0.5
         torch.nn.init.uniform_(prototypes, -_sqrt_k, _sqrt_k)
-        self.prototypes = torch.nn.parameter.Parameter(prototypes).to(self.device)
-        self.prototypes.requires_grad = True
+
+        self.prototypes = torch.nn.Parameter(prototypes) 
 
     def _load_schedulers(self):
         self.lr_scheduler = WarmupCosineSchedule(
@@ -228,20 +224,20 @@ class MSN():
             start_lr=self.optimization_lr[0],
             middle_lr=self.optimization_lr[1],
             final_lr=self.optimization_lr[2],
-            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+            T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
 
         self.wd_scheduler = CosineWDSchedule(
             optimizer=self.optimizer,
             start_wd=self.optimization_weight_decay[0],
             final_wd=self.optimization_weight_decay[1],
-            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+            T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
 
         self.ema_scheduler = EMACosineSchedule(
             start_ema=self.optimization_ema[0],
             final_ema=self.optimization_ema[1],
-            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+            T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
 
         self.student_temp_scheduler = LinearWarmupTemperatureSchedule(
@@ -249,7 +245,7 @@ class MSN():
             middle_temp=self.optimization_temperature_anchor[1],
             final_temp=self.optimization_temperature_anchor[2],
             warmup_steps=self.optimization_tempereature_warmup * len(self.train_dataloader),
-            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+            T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
 
         self.target_temp_scheduler = LinearWarmupTemperatureSchedule(
@@ -257,13 +253,13 @@ class MSN():
             middle_temp=self.optimization_temperature_target[1],
             final_temp=self.optimization_temperature_target[2],
             warmup_steps=self.optimization_tempereature_warmup * len(self.train_dataloader),
-            T_max=self.optimization_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
+            T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
     
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
-                target_modules = [self.encoder, self.projection_head, self.prototypes] if self.world_size == 1 else [self.encoder.module, self.projection_head.module, self.prototypes]
+                target_modules = [self.encoder] if self.world_size == 1 else [self.encoder.module]
 
                 decay_params = []
                 no_decay_params = []
@@ -289,6 +285,11 @@ class MSN():
                         "weight_decay": 0.0,
                         "WD_exclude": True
                     },
+                    {
+                        "params": [self.prototypes],
+                        "weight_decay": self.optimization_weight_decay[0],
+                        "WD_exclude": False
+                    }
                 ]
 
                 self.optimizer = optim.AdamW(
@@ -372,24 +373,6 @@ class MSN():
             case "vit_huge":
                 self.encoder = deit_huge(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
                 self.target_encoder = deit_huge(patch_size=self.meta_patch_size)
-        
-        self.projection_head = projection_head(
-            in_dim=self.encoder.get_embed_dim(),
-            hidden_dim=self.meta_projection_head_hidden_dim,
-            out_dim=self.meta_projection_head_output_dim,
-            use_bn=self.meta_projection_head_use_bn,
-            norm_last_layer=self.meta_projection_head_norm_last_layer,
-            n_layers=self.meta_projection_head_n_layers
-        )
-
-        self.target_projection_head = projection_head(
-            in_dim=self.encoder.get_embed_dim(),
-            hidden_dim=self.meta_projection_head_hidden_dim,
-            out_dim=self.meta_projection_head_output_dim,
-            use_bn=self.meta_projection_head_use_bn,
-            norm_last_layer=self.meta_projection_head_norm_last_layer,
-            n_layers=self.meta_projection_head_n_layers,
-        )
 
         if self.meta_pretrained_weights is not None:
             if os.path.exists(self.meta_pretrained_weights):
@@ -401,38 +384,27 @@ class MSN():
                 raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
         
         self.target_encoder.load_state_dict(self.encoder.state_dict())
-        self.target_projection_head.load_state_dict(self.projection_head.state_dict())
 
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
                 self.encoder.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"encoder.pth"), map_location=self.device))
                 self.target_encoder.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_encoder.pth"), map_location=self.device))
-                self.projection_head.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"projection_head.pth"), map_location=self.device))
-                self.target_projection_head.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_projection_head.pth"), map_location=self.device))
             else:
                 raise FileNotFoundError(f"Model checkpoint files not found in {os.path.join(self.output_folder, 'models')}.")
 
         self.encoder.to(self.device)
         self.target_encoder.to(self.device)
-        self.projection_head.to(self.device)
-        self.target_projection_head.to(self.device)
 
         self.encoder.unfreeze()
         self.target_encoder.freeze()
-        self.projection_head.unfreeze()
-        self.target_projection_head.freeze()
 
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
-            self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
 
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
-            self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
         
         self.encoder.train()
         self.target_encoder.train()
-        self.projection_head.train()
-        self.target_projection_head.train()
 
     def _load_config(self):
         self.data_datasets_path =  str(self.config["data"]["datasets_path"])
@@ -457,6 +429,10 @@ class MSN():
         self.data_local_views_gaussian_blur = bool(self.config["data"]["local_views"]["gaussian_blur"])
         self.data_local_views_horizontal_flip = bool(self.config["data"]["local_views"]["horizontal_flip"])
         self.data_local_views_crop_size = int(self.config["data"]["local_views"]["crop_size"])
+        self.data_normalize_mean = list(map(float, self.config["data"]["normalize"]["mean"]))
+        self.data_normalize_std = list(map(float, self.config["data"]["normalize"]["std"]))
+        self.data_separate_val_subset_use = bool(self.config["data"]["separate_val_subset"]["use"])
+        self.data_separate_val_subset_size = float(self.config["data"]["separate_val_subset"]["size"])
 
         self.meta_model_name = str(self.config["meta"]["model_name"])
         self.meta_checkpoint = bool(self.config["meta"]["checkpoint"])
@@ -465,9 +441,6 @@ class MSN():
         self.meta_patch_size = int(self.config["meta"]["patch_size"])
         self.meta_projection_head_hidden_dim = int(self.config["meta"]["projection_head"]["hidden_dim"])
         self.meta_projection_head_output_dim = int(self.config["meta"]["projection_head"]["output_dim"])
-        self.meta_projection_head_use_bn = bool(self.config["meta"]["projection_head"]["use_bn"])
-        self.meta_projection_head_norm_last_layer = bool(self.config["meta"]["projection_head"]["norm_last_layer"])
-        self.meta_projection_head_n_layers = int(self.config["meta"]["projection_head"]["n_layers"])
 
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
         self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))

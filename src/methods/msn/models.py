@@ -21,6 +21,9 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.distributed as dist
+from collections import OrderedDict
 
 from src.utils import trunc_normal_
 
@@ -162,7 +165,8 @@ class ConvEmbed(nn.Module):
 
 class VisionTransformer(nn.Module):
     """ Vision Transformer """
-    def __init__(self, img_size=[224], patch_size=16, in_chans=3, num_classes=0, embed_dim=768, depth=12,
+    def __init__(self, hidden_dim, output_dim,
+                 img_size=[224], patch_size=16, in_chans=3, num_classes=0, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=nn.LayerNorm,
                  conv_stem=False, conv_stem_channels=None, conv_stem_strides=None, use_checkpoint=False, **kwargs):
@@ -197,6 +201,16 @@ class VisionTransformer(nn.Module):
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
         self.apply(self._init_weights)
+
+        fc = OrderedDict([])
+        fc['fc1'] = torch.nn.Linear(embed_dim, hidden_dim)
+        fc['bn1'] = torch.nn.BatchNorm1d(hidden_dim)
+        fc['gelu1'] = torch.nn.GELU()
+        fc['fc2'] = torch.nn.Linear(hidden_dim, hidden_dim)
+        fc['bn2'] = torch.nn.BatchNorm1d(hidden_dim)
+        fc['gelu2'] = torch.nn.GELU()
+        fc['fc3'] = torch.nn.Linear(hidden_dim, output_dim)
+        self.fc = torch.nn.Sequential(fc)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -400,6 +414,7 @@ class VisionTransformer(nn.Module):
         checkpoint = torch.load(weight_path, map_location=device)
 
         state_dict = checkpoint.get("state_dict", checkpoint)
+        state_dict = checkpoint.get("encoder", state_dict)
         
         clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 
@@ -423,64 +438,34 @@ class VisionTransformer(nn.Module):
         for param in self.parameters():
             param.requires_grad = True
 
-class ProjectionHead(nn.Module):
-    def __init__(self, in_dim, hidden_dim=2048, out_dim=256, use_bn=True, norm_last_layer=False, n_layers=3):
-        super().__init__()
-
-        layers = [nn.Linear(in_dim, hidden_dim)]
-        if use_bn:
-            layers.append(nn.BatchNorm1d(hidden_dim))
-        layers.append(nn.GELU())
-        for _ in range(n_layers - 2):
-            layers.append(nn.Linear(hidden_dim, hidden_dim))
-            if use_bn:
-                layers.append(nn.BatchNorm1d(hidden_dim))
-            layers.append(nn.GELU())
-        layers.append(nn.Linear(hidden_dim, out_dim))
-        self.mlp = nn.Sequential(*layers)
-    
-    def forward(self, x):
-        return self.mlp(x)
-    
-    def freeze(self):
-        for param in self.parameters():
-            param.requires_grad = False
-    
-    def unfreeze(self):
-        for param in self.parameters():
-            param.requires_grad = True
-    
-def projection_head(in_dim, hidden_dim, out_dim, use_bn, norm_last_layer, n_layers):
-    return ProjectionHead(in_dim, hidden_dim, out_dim, use_bn, norm_last_layer, n_layers)
-
-def deit_tiny(patch_size=16, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_tiny(output_dim=256, hidden_dim=2048, patch_size=16, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_small(patch_size=16, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_small(output_dim=256, hidden_dim=2048, patch_size=16, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_small_p8(patch_size=8, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_small_p8(output_dim=256, hidden_dim=2048, patch_size=8, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_small_p7(patch_size=7, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_small_p7(output_dim=256, hidden_dim=2048, patch_size=7, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def vitc_4gf(patch_size=16, drop_path_rate=0., use_checkpoint=False):
+def vitc_4gf(output_dim=256, hidden_dim=2048, patch_size=16, drop_path_rate=0., use_checkpoint=False):
     channels = [48, 96, 192, 384, 384]
     strides = [2, 2, 2, 2, 1]
-    model = VisionTransformer(
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=384, depth=11, num_heads=6, mlp_ratio=3,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6),
         conv_stem=True, conv_stem_channels=channels, conv_stem_strides=strides,
@@ -488,10 +473,10 @@ def vitc_4gf(patch_size=16, drop_path_rate=0., use_checkpoint=False):
     )
     return model
 
-def deit_small_convstem(patch_size=16, drop_path_rate=0., use_checkpoint=False):
+def deit_small_convstem(output_dim=256, hidden_dim=2048, patch_size=16, drop_path_rate=0., use_checkpoint=False):
     channels = [48, 96, 192, 384, 384]
     strides = [2, 2, 2, 2, 1]
-    model = VisionTransformer(
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=384, depth=11, num_heads=6, mlp_ratio=6,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6),
         conv_stem=True, conv_stem_channels=channels, conv_stem_strides=strides,
@@ -499,68 +484,68 @@ def deit_small_convstem(patch_size=16, drop_path_rate=0., use_checkpoint=False):
     )
     return model
 
-def deit_base_p8(patch_size=8, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_base_p8(output_dim=256, hidden_dim=2048, patch_size=8, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_base_p7(patch_size=7, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_base_p7(output_dim=256, hidden_dim=2048, patch_size=7, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_base_p4(patch_size=4, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_base_p4(output_dim=256, hidden_dim=2048, patch_size=4, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_base(patch_size=16, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_base(output_dim=256, hidden_dim=2048, patch_size=16, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_large_p7(patch_size=7, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_large_p7(output_dim=256, hidden_dim=2048, patch_size=7, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_large_p8(patch_size=8, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_large_p8(output_dim=256, hidden_dim=2048, patch_size=8, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_large(patch_size=16, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_large(output_dim=256, hidden_dim=2048, patch_size=16, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_huge(patch_size=16, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_huge(output_dim=256, hidden_dim=2048, patch_size=16, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_huge_p8(patch_size=8, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_huge_p8(output_dim=256, hidden_dim=2048, patch_size=8, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_huge_p7(patch_size=7, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_huge_p7(output_dim=256, hidden_dim=2048, patch_size=7, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model
 
-def deit_huge_p10(patch_size=10, drop_path_rate=0., use_checkpoint=False):
-    model = VisionTransformer(
+def deit_huge_p10(output_dim=256, hidden_dim=2048, patch_size=10, drop_path_rate=0., use_checkpoint=False):
+    model = VisionTransformer(hidden_dim, output_dim,
         patch_size=patch_size, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4,
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_path_rate=drop_path_rate, use_checkpoint=use_checkpoint)
     return model

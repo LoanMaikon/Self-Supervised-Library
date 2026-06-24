@@ -31,10 +31,11 @@ class AllReduce(torch.autograd.Function):
         return grads
 
 class msn_loss():
-    def __init__(self, num_views=1, me_max=True, return_preds=False):
+    def __init__(self, num_views, me_max, return_preds, softmax_temperature):
         self.num_views = num_views
         self.me_max = me_max
         self.return_preds = return_preds
+        self.softmax_temperature = softmax_temperature
 
         self.softmax = torch.nn.Softmax(dim=1)
 
@@ -43,11 +44,11 @@ class msn_loss():
         sharp_p /= torch.sum(sharp_p, dim=1, keepdim=True)
         return sharp_p
 
-    def snn(self, query, supports, support_labels, temp=0.1):
+    def snn(self, query, supports, support_labels):
         """ Soft Nearest Neighbours similarity classifier """
         query = torch.nn.functional.normalize(query)
         supports = torch.nn.functional.normalize(supports)
-        return self.softmax(query @ supports.T / temp) @ support_labels
+        return self.softmax(query @ supports.T / self.softmax_temperature) @ support_labels
 
     def compute_loss(
         self,
@@ -55,13 +56,12 @@ class msn_loss():
         target_views,
         prototypes,
         proto_labels,
-        student_temperature,
         T,
         use_entropy=False,
         use_sinkhorn=False,
     ):
         # Step 1: compute anchor predictions
-        probs = self.snn(anchor_views, prototypes, proto_labels, temp=student_temperature)
+        probs = self.snn(anchor_views, prototypes, proto_labels)
 
         # Step 2: compute targets for anchor predictions
         with torch.no_grad():

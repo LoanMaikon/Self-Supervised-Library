@@ -45,7 +45,8 @@ class MSN():
         self.msn_loss = msn_loss(
             num_views=self.data_global_views_num + self.data_local_views_num - 1,
             me_max=True,
-            return_preds=True
+            return_preds=True,
+            softmax_temperature=self.optimization_softmax_temperature,
         )
 
         self.train_loss = []
@@ -59,7 +60,6 @@ class MSN():
             self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "lr_scheduler.pth"), map_location=self.device))
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "wd_scheduler.pth"), map_location=self.device))
             self.ema_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "ema_scheduler.pth"), map_location=self.device))
-            self.student_temp_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "student_temp_scheduler.pth"), map_location=self.device))
             self.target_temp_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "target_temp_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
             loaded = torch.load(os.path.join(self.output_folder, "models", "prototypes.pth"), map_location=self.device)
@@ -103,7 +103,6 @@ class MSN():
 
                     (ploss, me_max, ent, _) = self.msn_loss.compute_loss(
                         T=self.target_temp_scheduler.get_value(),
-                        student_temperature=self.student_temp_scheduler.get_value(),
                         use_sinkhorn=self.optimization_use_sinkhorn,
                         use_entropy=self.optimization_use_entropy,
                         anchor_views=anchor_views,
@@ -136,7 +135,6 @@ class MSN():
                 self.lr_scheduler.step()
                 self.wd_scheduler.step()
                 self.ema_scheduler.step()
-                self.student_temp_scheduler.step()
                 self.target_temp_scheduler.step()
             
             self.train_loss[-1] /= num_samples
@@ -168,7 +166,6 @@ class MSN():
         wd_scheduler_state_dict = self.wd_scheduler.state_dict()
         ema_scheduler_state_dict = self.ema_scheduler.state_dict()
         scaler_state_dict = self.scaler.state_dict()
-        student_temp_scheduler_state_dict = self.student_temp_scheduler.state_dict()
         target_temp_scheduler_state_dict = self.target_temp_scheduler.state_dict()
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder.pth"))
@@ -178,7 +175,6 @@ class MSN():
         torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler.pth"))
         torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler.pth"))
         torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler.pth"))
-        torch.save(student_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"student_temp_scheduler.pth"))
         torch.save(target_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"target_temp_scheduler.pth"))
         torch.save(self.prototypes.detach().cpu(), os.path.join(self.output_folder, "models", "prototypes.pth"))
         
@@ -190,7 +186,6 @@ class MSN():
             torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_{epoch}.pth"))
             torch.save(ema_scheduler_state_dict, os.path.join(self.output_folder, "models", f"ema_scheduler_{epoch}.pth"))
             torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_{epoch}.pth"))
-            torch.save(student_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"student_temp_scheduler_{epoch}.pth"))
             torch.save(target_temp_scheduler_state_dict, os.path.join(self.output_folder, "models", f"target_temp_scheduler_{epoch}.pth"))
             torch.save(self.prototypes.detach().cpu(), os.path.join(self.output_folder, "models", f"prototypes_{epoch}.pth"))
 
@@ -240,14 +235,6 @@ class MSN():
             T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
 
-        self.student_temp_scheduler = LinearWarmupTemperatureSchedule(
-            start_temp=self.optimization_temperature_anchor[0],
-            middle_temp=self.optimization_temperature_anchor[1],
-            final_temp=self.optimization_temperature_anchor[2],
-            warmup_steps=self.optimization_tempereature_warmup * len(self.train_dataloader),
-            T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
-        )
-
         self.target_temp_scheduler = LinearWarmupTemperatureSchedule(
             start_temp=self.optimization_temperature_target[0],
             middle_temp=self.optimization_temperature_target[1],
@@ -278,17 +265,18 @@ class MSN():
                     {
                         "params": decay_params,
                         "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False
+                        "WD_exclude": False,
                     },
                     {
                         "params": no_decay_params,
                         "weight_decay": 0.0,
-                        "WD_exclude": True
+                        "WD_exclude": True,
                     },
                     {
                         "params": [self.prototypes],
-                        "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False
+                        "weight_decay": 0.0,
+                        "WD_exclude": True,
+                        "lr": self.optimization_lr[1],
                     }
                 ]
 
@@ -307,7 +295,7 @@ class MSN():
             dataset_name=self.data_train_dataset,
             separate_val_subset=self.data_separate_val_subset_use,
             val_size=self.data_separate_val_subset_size,
-            transforms=[self.transform_global, self.transform_focal],
+            transforms=[self.transform_global, self.transform_local],
             times=[self.data_global_views_num, self.data_local_views_num]
         )
 
@@ -342,7 +330,7 @@ class MSN():
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
 
-        self.transform_focal = v2.Compose([
+        self.transform_local = v2.Compose([
             v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio)),
             v2.RandomHorizontalFlip(p=0.5) if self.data_local_views_horizontal_flip else v2.RandomHorizontalFlip(p=0.0),
             __get_color_distortion(strength=0.5) if self.data_local_views_color_jitter else v2.Identity(),
@@ -446,7 +434,6 @@ class MSN():
         self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))
         self.optimization_weight_decay = list(map(float, self.config["optimization"]["weight_decay"]))
         self.optimization_ema = list(map(float, self.config["optimization"]["ema"]))
-        self.optimization_temperature_anchor = list(map(float, self.config["optimization"]["temperature_anchor"]))
         self.optimization_temperature_target = list(map(float, self.config["optimization"]["temperature_target"]))
         self.optimization_tempereature_warmup = int(self.config["optimization"]["tempereature_warmup"])
         self.optimization_num_epochs = int(self.config["optimization"]["num_epochs"])
@@ -459,5 +446,6 @@ class MSN():
         self.optimization_drop_path_rate = float(self.config["optimization"]["drop_path_rate"])
         self.optimization_use_entropy = bool(self.config["optimization"]["use_entropy"])
         self.optimization_entropy_regularization_weight = float(self.config["optimization"]["entropy_regularization_weight"])
+        self.optimization_softmax_temperature = float(self.config["optimization"]["softmax_temperature"])
     
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

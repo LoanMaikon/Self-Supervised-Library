@@ -81,6 +81,6 @@ optimization:
   freeze_prototypes_epochs: 0
   use_sinkhorn: true
   drop_path_rate: 0.15
-  use_entropy: True
+  use_entropy: false
   entropy_regularization_weight: 0.0
   softmax_temperature: 0.1

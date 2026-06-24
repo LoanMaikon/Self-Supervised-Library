@@ -240,7 +240,6 @@ class VisionTransformer(nn.Module):
                 h, z = _h, _z
             else:
                 h, z = torch.cat((h, _h)), torch.cat((z, _z))
-            patch_drop = 0.
             start_idx = end_idx
 
         if return_before_head:

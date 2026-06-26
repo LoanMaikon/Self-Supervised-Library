@@ -93,25 +93,38 @@ class MSN():
 
                 with torch.amp.autocast(device_type=self.device.type):
                     h_student, z_student = self.encoder(
-                        images[1:], return_before_head=True, patch_drop=self.data_global_views_mask_ratio
+                        images[1:],
+                        return_before_head=True,
+                        patch_drop=self.data_global_views_mask_ratio,
                     )
                     with torch.no_grad():
                         h_teacher, _ = self.target_encoder(images[0], return_before_head=True)
 
-                    anchor_views = z_student
-                    target_views = h_teacher.detach()
+                h_student = h_student.float()
+                z_student = z_student.float()
+                h_teacher = h_teacher.float()
+                prototypes = self.prototypes.float()
+                proto_labels = self.proto_labels.float()
 
-                    (ploss, me_max, ent, _) = self.msn_loss.compute_loss(
-                        T=self.target_temp_scheduler.get_value(),
+                with torch.amp.autocast(device_type=self.device.type, enabled=False):
+                    ploss, me_max, ent, _ = self.msn_loss.compute_loss(
+                        T=float(self.target_temp_scheduler.get_value()),
                         use_sinkhorn=self.optimization_use_sinkhorn,
                         use_entropy=self.optimization_use_entropy,
-                        anchor_views=anchor_views,
-                        target_views=target_views,
-                        proto_labels=self.proto_labels,
-                        prototypes=self.prototypes,
+                        anchor_views=z_student,
+                        target_views=h_teacher.detach(),
+                        proto_labels=proto_labels,
+                        prototypes=prototypes,
                     )
 
-                    loss = ploss + self.optimization_memax_regularization_weight*me_max + self.optimization_entropy_regularization_weight*ent if self.optimization_use_entropy else ploss + self.optimization_memax_regularization_weight*me_max
+                    if self.optimization_use_entropy:
+                        loss = (
+                            ploss
+                            + self.optimization_memax_regularization_weight * me_max
+                            + self.optimization_entropy_regularization_weight * ent
+                        )
+                    else:
+                        loss = ploss + self.optimization_memax_regularization_weight * me_max
 
                     loss_value = loss.item()
                     self.train_loss[-1] += loss_value * images[0].size(0)
@@ -122,6 +135,12 @@ class MSN():
                     if self.prototypes.grad is not None:
                         self.prototypes.grad.data = AllReduceSum.apply(self.prototypes.grad.data)
                         self.prototypes.grad.data /= self.world_size
+
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    self.encoder.module.parameters() if self.world_size > 1 else self.encoder.parameters(),
+                    max_norm=3.0,
+                )
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
 
@@ -191,10 +210,11 @@ class MSN():
 
     def update_target_network(self, ema):
         encoder_module = self.encoder.module if self.world_size > 1 else self.encoder
-        
+        target_module = self.target_encoder
+
         with torch.no_grad():
-            for param_q, param_k in zip(encoder_module.parameters(), self.target_encoder.parameters()):
-                param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
+            for param_q, param_k in zip(encoder_module.parameters(), target_module.parameters()):
+                param_k.data.mul_(ema).add_(param_q.detach().data, alpha=1 - ema)
 
     def one_hot(self, targets, num_classes, smoothing=0.0):
         off_value = smoothing / num_classes

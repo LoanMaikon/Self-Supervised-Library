@@ -15,6 +15,7 @@ def sinkhorn(features, epsilon, sinkhorn_iterations, world_size):
     sum_Q = torch.sum(Q)
     if is_distributed():
         dist.all_reduce(sum_Q)
+    eps = 1e-6
     Q /= sum_Q
 
     for it in range(sinkhorn_iterations):
@@ -22,11 +23,12 @@ def sinkhorn(features, epsilon, sinkhorn_iterations, world_size):
         sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
         if is_distributed():
             dist.all_reduce(sum_of_rows)
-        Q /= sum_of_rows
+        Q /= sum_of_rows.clamp(eps)
         Q /= K
 
         # normalize each column: total weight per sample must be 1/B
-        Q /= torch.sum(Q, dim=0, keepdim=True)
+        col_sum = torch.sum(Q, dim=0, keepdim=True)
+        Q /= col_sum.clamp(eps)
         Q /= B
 
     Q *= B # the colomns must sum to 1 so that Q is an assignment

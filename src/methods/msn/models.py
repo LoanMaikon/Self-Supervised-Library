@@ -225,7 +225,7 @@ class VisionTransformer(nn.Module):
             if isinstance(m, nn.Conv2d) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, return_before_head=False, patch_drop=0.):
+    def forward(self, x, return_before_head=False, patch_drop=0.0):
         if not isinstance(x, list):
             x = [x]
         idx_crops = torch.cumsum(torch.unique_consecutive(
@@ -241,6 +241,9 @@ class VisionTransformer(nn.Module):
             else:
                 h, z = torch.cat((h, _h)), torch.cat((z, _z))
             start_idx = end_idx
+
+            # In the original code the local views actually aren't focal, they are not masked
+            patch_drop = 0.0  # disable patch drop for the next crops
 
         if return_before_head:
             return h, z

@@ -108,7 +108,7 @@ class Evaluation():
                 images = images[0].to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
-                with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+                with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.meta_amp):
                     if self.meta_mode == "linear_eval":
                         with torch.no_grad():
                             features = self.encoder.eval_forward(images)
@@ -1182,6 +1182,7 @@ class Evaluation():
         self.meta_pretrained_weights = self.config["meta"]["pretrained_weights"]
         self.meta_save_every = int(self.config["meta"]["save_every"])
         self.meta_framework = self.config["meta"]["framework"]
+        self.meta_amp = bool(self.config["meta"]["amp"])
 
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
         self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))

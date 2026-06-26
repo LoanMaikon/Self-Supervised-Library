@@ -163,36 +163,19 @@ class SimSiam():
     
     def _load_optimizer(self):
         match self.optimization_optimizer:
-            case "sgd":
-                decay_params = []
-                no_decay_params = []
-
-                for name, p in self.model.named_parameters():
-                    if not p.requires_grad:
-                        continue
-
-                    if p.ndim > 1:
-                        decay_params.append(p)
-                    else:
-                        no_decay_params.append(p)
+            case "sgd": # SimSiam uses weight decay even in bias and norm parameters
+                model_ref = self.model.module if hasattr(self.model, "module") else self.model
 
                 param_groups = [
-                    {
-                        "params": decay_params,
-                        "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False
-                    },
-                    {
-                        "params": no_decay_params,
-                        "weight_decay": 0.0,
-                        "WD_exclude": True
-                    },
+                    {"params": model_ref.encoder.parameters(), "fix_lr": False},
+                    {"params": model_ref.predictor.parameters(), "fix_lr": True},
                 ]
 
                 self.optimizer = optim.SGD(
                     param_groups,
                     lr=self.optimization_lr[0],
                     momentum=0.9,
+                    weight_decay=self.optimization_weight_decay[0],
                 )
             
             case _:
@@ -268,6 +251,7 @@ class SimSiam():
         self.model.unfreeze()
 
         if self.world_size > 1:
+            self.model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
 
             self.model = DDP(self.model, device_ids=[self.rank], output_device=self.rank)
         

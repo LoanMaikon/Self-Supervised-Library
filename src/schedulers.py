@@ -43,7 +43,10 @@ class WarmupCosineSchedule(object):
 
         for group in self.optimizer.param_groups:
             if self.param_group_filter is None or self.param_group_filter(group):
-                group["lr"] = new_lr
+                    if group.get("fix_lr", False):
+                        group["lr"] = self.start_lr
+                    else:
+                        group["lr"] = new_lr
 
         self.actual_value = new_lr
         return new_lr

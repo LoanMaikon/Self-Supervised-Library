@@ -59,6 +59,5 @@ optimization:
   epochs: 90
   warmup_epochs: 0
   optimizer: lars
-  if_lars_exclude_bias_n_norm: false
-  if_lars_clip: false
+  exclude_bias_n_norm: false
   criterion: cross_entropy

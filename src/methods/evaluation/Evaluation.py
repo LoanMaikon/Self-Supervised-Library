@@ -1105,18 +1105,27 @@ class Evaluation():
                         else:
                             no_decay_params.append(p)
 
-                param_groups = [
-                    {
-                        "params": decay_params,
-                        "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False
-                    },
-                    {
-                        "params": no_decay_params,
-                        "weight_decay": 0.0,
-                        "WD_exclude": True
-                    },
-                ]
+                if self.optimization_exclude_bias_n_norm:
+                    param_groups = [
+                        {
+                            "params": decay_params,
+                            "weight_decay": self.optimization_weight_decay[0],
+                            "WD_exclude": False
+                        },
+                        {
+                            "params": no_decay_params,
+                            "weight_decay": 0.0,
+                            "WD_exclude": True
+                        },
+                    ]
+                else:
+                    param_groups = [
+                        {
+                            "params": decay_params + no_decay_params,
+                            "weight_decay": self.optimization_weight_decay[0],
+                            "WD_exclude": False
+                        },
+                    ]
 
                 self.optimizer = optim.SGD(
                     param_groups,
@@ -1131,8 +1140,7 @@ class Evaluation():
                     lr=self.optimization_lr[0],
                     momentum=0.9,
                     weight_decay=self.optimization_weight_decay[0],
-                    exclude_bias_n_norm=self.optimization_if_lars_exclude_bias_n_norm,
-                    clip=self.optimization_if_lars_clip,
+                    exclude_bias_n_norm=self.optimization_exclude_bias_n_norm,
                 )
 
             case _:
@@ -1213,8 +1221,7 @@ class Evaluation():
         self.optimization_epochs = int(self.config["optimization"]["epochs"])
         self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
         self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
-        self.optimization_if_lars_exclude_bias_n_norm = bool(self.config["optimization"]["if_lars_exclude_bias_n_norm"])
-        self.optimization_if_lars_clip = bool(self.config["optimization"]["if_lars_clip"])
+        self.optimization_exclude_bias_n_norm = bool(self.config["optimization"]["exclude_bias_n_norm"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

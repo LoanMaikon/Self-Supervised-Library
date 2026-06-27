@@ -11,6 +11,12 @@ class LinearHead(torch.nn.Module):
             )
         else:
             self.linear = torch.nn.Linear(in_features, out_features, bias=True)
+        
+        self._init()
+    
+    def _init(self):
+        self.linear.weight.data.normal_(mean=0.0, std=0.01)
+        self.linear.bias.data.zero_()
 
     def unfreeze(self):
         for param in self.linear.parameters():

@@ -3,10 +3,10 @@ mode: evaluate
 data:
   datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 2048 # 2 gpu
+  batch_size: 2048 # 1 gpu
   inference_batch_size: 1024
   crop_size: 224
-  num_workers: 32 # 2 gpu
+  num_workers: 64 # 1 gpu
   prefetch_factor: 1
   pin_memory: false
   drop_last: true
@@ -50,8 +50,8 @@ meta:
 optimization:
   ipe_scale: 1.0
   lr:
-  - 1.6
-  - 1.6
+  - 0.8
+  - 0.8
   - 0
   weight_decay:
   - 0
@@ -59,4 +59,6 @@ optimization:
   epochs: 90
   warmup_epochs: 0
   optimizer: lars
+  if_lars_exclude_bias_n_norm: false
+  if_lars_clip: false
   criterion: cross_entropy

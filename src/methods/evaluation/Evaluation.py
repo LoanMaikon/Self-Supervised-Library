@@ -950,25 +950,46 @@ class Evaluation():
                     ratio=self.data_random_resized_crop_ratio
                 )],
                 p=self.data_random_resized_crop_p
-            ) if self.data_random_resized_crop_use else v2.Resize((self.data_crop_size, self.data_crop_size)),
+            ) if self.data_random_resized_crop_use else v2.Resize(
+                (self.data_crop_size, self.data_crop_size)
+            ),
 
-            v2.RandomHorizontalFlip(p=self.data_horizontal_flip_p) if self.data_horizontal_flip_use else v2.Identity(),
+            v2.RandomHorizontalFlip(
+                p=self.data_horizontal_flip_p
+            ) if self.data_horizontal_flip_use else v2.Identity(),
 
             v2.Compose([
                 v2.ToImage(),
                 v2.ToDtype(torch.float32, scale=True)
             ]),
 
-            v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
+            v2.Normalize(
+                mean=self.data_normalize_mean,
+                std=self.data_normalize_std
+            ),
         ])
 
         self.test_transform = v2.Compose([
             v2.Compose([
-                v2.Resize((self.data_central_crop_on_test_initial_crop_size, self.data_central_crop_on_test_initial_crop_size)),
+                v2.Resize(
+                    self.data_central_crop_on_test_initial_crop_size,
+                    interpolation=v2.InterpolationMode.BICUBIC
+                ),
                 v2.CenterCrop(self.data_crop_size),
-            ]) if self.data_central_crop_on_test_use else v2.Resize((self.data_crop_size, self.data_crop_size)),
-            v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
-            v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
+            ]) if self.data_central_crop_on_test_use else v2.Resize(
+                (self.data_crop_size, self.data_crop_size),
+                interpolation=v2.InterpolationMode.BICUBIC
+            ),
+
+            v2.Compose([
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True)
+            ]),
+
+            v2.Normalize(
+                mean=self.data_normalize_mean,
+                std=self.data_normalize_std
+            ),
         ])
 
     def _load_dataloader(self):
@@ -1109,7 +1130,9 @@ class Evaluation():
                     param_list,
                     lr=self.optimization_lr[0],
                     momentum=0.9,
-                    weight_decay=self.optimization_weight_decay[0]
+                    weight_decay=self.optimization_weight_decay[0],
+                    exclude_bias_n_norm=self.optimization_if_lars_exclude_bias_n_norm,
+                    clip=self.optimization_if_lars_clip,
                 )
 
             case _:
@@ -1190,6 +1213,8 @@ class Evaluation():
         self.optimization_epochs = int(self.config["optimization"]["epochs"])
         self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
         self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
+        self.optimization_if_lars_exclude_bias_n_norm = bool(self.config["optimization"]["if_lars_exclude_bias_n_norm"])
+        self.optimization_if_lars_clip = bool(self.config["optimization"]["if_lars_clip"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

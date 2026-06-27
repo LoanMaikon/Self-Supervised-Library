@@ -59,4 +59,6 @@ optimization:
   epochs: 90
   warmup_epochs: 0
   optimizer: sgd
+  if_lars_exclude_bias_n_norm: true
+  if_lars_clip: false
   criterion: cross_entropy

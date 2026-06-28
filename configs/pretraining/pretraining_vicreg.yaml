@@ -57,3 +57,7 @@ optimization:
   inv_coeff: 25.0
   std_coeff: 25.0
   cov_coeff: 1.0
+  decay_bias: false
+  decay_norm: false
+  adapt_bias: false
+  adapt_norm: false

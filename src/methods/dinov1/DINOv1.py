@@ -8,7 +8,7 @@ import copy
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearWarmupTemperatureSchedule
 from .models import vit_base, vit_small, vit_tiny, projection_head
@@ -80,8 +80,9 @@ class DINOv1():
                 images = [img.to(self.device, non_blocking=True) for img in images]
 
                 with torch.amp.autocast(device_type=self.device.type):
-                    target_outputs = self.target_encoder(images[:self.data_global_views_num])
-                    target_outputs = self.target_projection_head(target_outputs)
+                    with torch.no_grad():
+                        target_outputs = self.target_encoder(images[:self.data_global_views_num])
+                        target_outputs = self.target_projection_head(target_outputs)
 
                     student_outputs = self.encoder(images)
                     student_outputs = self.projection_head(student_outputs) / self.student_temp_scheduler.get_value()
@@ -256,33 +257,27 @@ class DINOv1():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
-                target_modules = [self.encoder, self.projection_head] if self.world_size == 1 else [self.encoder.module, self.projection_head.module]
+                param_groups = []
 
-                decay_params = []
-                no_decay_params = []
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.encoder if self.world_size == 1 else self.encoder.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
-                for module in target_modules:
-                    for name, p in module.named_parameters():
-                        if not p.requires_grad:
-                            continue
-
-                        if p.ndim > 1 and "bias" not in name:
-                            decay_params.append(p)
-                        else:
-                            no_decay_params.append(p)
-
-                param_groups = [
-                    {
-                        "params": decay_params,
-                        "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False
-                    },
-                    {
-                        "params": no_decay_params,
-                        "weight_decay": 0.0,
-                        "WD_exclude": True
-                    },
-                ]
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.projection_head if self.world_size == 1 else self.projection_head.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
                 self.optimizer = optim.AdamW(
                     param_groups,
@@ -290,7 +285,9 @@ class DINOv1():
                 )
 
             case _:
-                raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
+                raise ValueError(
+                    f"Unsupported optimizer: {self.optimization_optimizer}"
+                )
 
     def _load_dataloader(self):
         self.train_dataset = datasets(
@@ -477,5 +474,7 @@ class DINOv1():
         self.optimization_center_momentum = float(self.config["optimization"]["center_momentum"])
         self.optimization_freeze_last_layer_epochs = int(self.config["optimization"]["freeze_last_layer_epochs"])
         self.optimization_drop_path_rate = float(self.config["optimization"]["drop_path_rate"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

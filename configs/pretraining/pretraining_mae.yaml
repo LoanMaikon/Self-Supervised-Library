@@ -54,3 +54,5 @@ optimization:
   epochs: 800
   warmup_epochs: 40
   optimizer: adamw
+  decay_bias: false
+  decay_norm: false

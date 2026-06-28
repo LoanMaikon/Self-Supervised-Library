@@ -10,7 +10,7 @@ import os
 
 from .models import vit_predictor, vit_tiny, vit_small, vit_base, vit_large, vit_huge, vit_giant, apply_masks
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values, repeat_interleave_batch
+    recreate_csv_log, get_last_epoch, load_last_values, repeat_interleave_batch, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMALinearSchedule
 from .mask_collator import MaskCollator
 from src.datasets import datasets
@@ -163,8 +163,11 @@ class IJEPA():
             torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch_{epoch}.pth"))
     
     def update_target_network(self, ema):
+        encoder_module = self.encoder.module if self.world_size > 1 else self.encoder
+        target_encoder_module = self.target_encoder.module if self.world_size > 1 else self.target
+
         with torch.no_grad():
-            for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+            for param_q, param_k in zip(encoder_module.parameters(), target_encoder_module.parameters()):
                 param_k.data.mul_(ema).add_(param_q.data, alpha=1 - ema)
 
     def _load_schedulers(self):
@@ -193,33 +196,29 @@ class IJEPA():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
-                target_modules = [self.encoder, self.predictor] if self.world_size == 1 else [self.encoder.module, self.predictor.module]
+                encoder = self.encoder if self.world_size == 1 else self.encoder.module
 
-                decay_params = []
-                no_decay_params = []
+                param_groups = []
 
-                for module in target_modules:
-                    for name, p in module.named_parameters():
-                        if not p.requires_grad:
-                            continue
+                param_groups.extend(
+                    make_param_groups(
+                        model=encoder,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
-                        if p.ndim > 1 and "bias" not in name:
-                            decay_params.append(p)
-                        else:
-                            no_decay_params.append(p)
-
-                param_groups = [
-                    {
-                        "params": decay_params,
-                        "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False
-                    },
-                    {
-                        "params": no_decay_params,
-                        "weight_decay": 0.0,
-                        "WD_exclude": True
-                    },
-                ]
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.predictor if self.world_size == 1 else self.predictor.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
                 self.optimizer = optim.AdamW(
                     param_groups,
@@ -227,7 +226,9 @@ class IJEPA():
                 )
 
             case _:
-                raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
+                raise ValueError(
+                    f"Unsupported optimizer: {self.optimization_optimizer}"
+                )
 
     def _load_criterion(self):
         match self.optimization_criterion:
@@ -393,5 +394,7 @@ class IJEPA():
         self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
         self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

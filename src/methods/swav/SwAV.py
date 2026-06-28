@@ -7,7 +7,7 @@ import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, resnet50w2, resnet50w4, resnet50w5, projection_head, prototypes
 from src.datasets import datasets
@@ -244,8 +244,46 @@ class SwAV():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "lars":
+                param_groups = []
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.encoder if self.world_size == 1 else self.encoder.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.projection_head if self.world_size == 1 else self.projection_head.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.prototypes if self.world_size == 1 else self.prototypes.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
                 self.optimizer = LARS(
-                    list(self.encoder.parameters()) + list(self.projection_head.parameters()) + list(self.prototypes.parameters()) if self.world_size == 1 else list(self.encoder.module.parameters()) + list(self.projection_head.module.parameters()) + list(self.prototypes.module.parameters()),
+                    params=param_groups,
                     lr=self.optimization_lr[0],
                     weight_decay=self.optimization_weight_decay[0],
                 )
@@ -419,6 +457,10 @@ class SwAV():
         self.optimization_num_prototypes = int(self.config["optimization"]["num_prototypes"])
         self.optimization_queue_start_epoch = int(self.config["optimization"]["queue_start_epoch"])
         self.optimization_freeze_prototypes_niters = int(self.config["optimization"].get("freeze_prototypes_niters", 313))
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
+        self.optimization_adapt_bias = bool(self.config["optimization"]["adapt_bias"])
+        self.optimization_adapt_norm = bool(self.config["optimization"]["adapt_norm"])
 
         requested_queue_length = int(self.config["optimization"]["queue_length"])
         adjusted_global_queue_length = requested_queue_length

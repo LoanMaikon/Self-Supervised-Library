@@ -6,7 +6,7 @@ import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from src.datasets import datasets
 from .models import resnet50
@@ -163,23 +163,58 @@ class SimSiam():
     
     def _load_optimizer(self):
         match self.optimization_optimizer:
-            case "sgd": # SimSiam uses weight decay even in bias and norm parameters
-                model_ref = self.model.module if hasattr(self.model, "module") else self.model
+            case "sgd":
+                model = self.model if self.world_size == 1 else self.model.module
 
-                param_groups = [
-                    {"params": model_ref.encoder.parameters(), "fix_lr": False},
-                    {"params": model_ref.predictor.parameters(), "fix_lr": True},
-                ]
+                encoder = model.encoder
+                projection_head = model.fc
+                predictor = model.predictor
+
+                param_groups = []
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=encoder,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                        fix_lr=False,
+                    )
+                )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=projection_head,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[1],
+                        fix_lr=False,
+                    )
+                )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=predictor,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[2],
+                        fix_lr=True,
+                    )
+                )
 
                 self.optimizer = optim.SGD(
                     param_groups,
                     lr=self.optimization_lr[0],
                     momentum=0.9,
-                    weight_decay=self.optimization_weight_decay[0],
                 )
-            
+
             case _:
-                raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
+                raise ValueError(
+                    f"Unsupported optimizer: {self.optimization_optimizer}"
+                )
 
     def _load_dataloader(self):
         self.train_dataset = datasets(
@@ -290,5 +325,7 @@ class SimSiam():
         self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
         self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

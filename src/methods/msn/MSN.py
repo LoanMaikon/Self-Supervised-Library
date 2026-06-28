@@ -8,7 +8,7 @@ import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values, AllReduceSum
+    recreate_csv_log, get_last_epoch, load_last_values, AllReduceSum, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearWarmupTemperatureSchedule
 from src.datasets import datasets
@@ -63,7 +63,8 @@ class MSN():
             self.target_temp_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "target_temp_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
             loaded = torch.load(os.path.join(self.output_folder, "models", "prototypes.pth"), map_location=self.device)
-            self.prototypes = torch.nn.Parameter(loaded.to(self.device))
+            with torch.no_grad():
+                self.prototypes.data.copy_(loaded.to(self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
             self.lr_values, self.wd_values, self.ema_values, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
@@ -266,39 +267,37 @@ class MSN():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
-                target_modules = [self.encoder] if self.world_size == 1 else [self.encoder.module]
+                encoder = self.encoder if self.world_size == 1 else self.encoder.module
 
-                decay_params = []
-                no_decay_params = []
+                param_groups = []
 
-                for module in target_modules:
-                    for name, p in module.named_parameters():
-                        if not p.requires_grad:
-                            continue
+                param_groups.extend(
+                    make_param_groups(
+                        model=encoder,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
-                        if p.ndim > 1 and "bias" not in name:
-                            decay_params.append(p)
-                        else:
-                            no_decay_params.append(p)
-
-                param_groups = [
-                    {
-                        "params": decay_params,
-                        "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False,
-                    },
-                    {
-                        "params": no_decay_params,
-                        "weight_decay": 0.0,
-                        "WD_exclude": True,
-                    },
-                    {
-                        "params": [self.prototypes],
-                        "weight_decay": 0.0,
-                        "WD_exclude": True,
-                        "lr": self.optimization_lr[1],
-                    }
-                ]
+                param_groups.extend(
+                    [
+                        {
+                            "params": [self.prototypes],
+                            "lr": self.optimization_lr[1],
+                            "initial_lr": self.optimization_lr[1],
+                            "weight_decay": self.optimization_weight_decay[0],
+                            "is_bias": False,
+                            "is_norm": False,
+                            "decay_bias": self.optimization_decay_bias,
+                            "decay_norm": self.optimization_decay_norm,
+                            "adapt_bias": False,
+                            "adapt_norm": False,
+                            "fix_lr": False,
+                        }
+                    ]
+                )
 
                 self.optimizer = optim.AdamW(
                     param_groups,
@@ -306,7 +305,9 @@ class MSN():
                 )
 
             case _:
-                raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
+                raise ValueError(
+                    f"Unsupported optimizer: {self.optimization_optimizer}"
+                )
 
     def _load_dataloader(self):
         self.train_dataset = datasets(
@@ -467,5 +468,7 @@ class MSN():
         self.optimization_use_entropy = bool(self.config["optimization"]["use_entropy"])
         self.optimization_entropy_regularization_weight = float(self.config["optimization"]["entropy_regularization_weight"])
         self.optimization_softmax_temperature = float(self.config["optimization"]["softmax_temperature"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
     
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

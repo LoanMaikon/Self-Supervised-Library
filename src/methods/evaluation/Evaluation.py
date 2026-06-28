@@ -27,7 +27,7 @@ from src.methods.msn.models import deit_tiny as msn_deit_tiny, deit_small as msn
 from .resnet50 import resnet50 as resnet50_eval
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .linear_head import LinearHead
 from src.datasets import datasets
@@ -1084,48 +1084,30 @@ class Evaluation():
                 raise ValueError(f"Unsupported criterion: {self.optimization_criterion}")
 
     def _load_optimizer(self):
-        modules = None
-        if self.meta_mode == "linear_eval":
-            modules = [self.linear_head] if self.world_size == 1 else [self.linear_head.module]
-        else:
-            modules = [self.encoder, self.linear_head] if self.world_size == 1 else [self.encoder.module, self.linear_head.module]
-
         match self.optimization_optimizer:
             case "sgd":
-                decay_params = []
-                no_decay_params = []
+                param_groups = []
 
-                for module in modules:
-                    for name, p in module.named_parameters():
-                        if not p.requires_grad:
-                            continue
+                if self.meta_mode == "fine_tuning":
+                    param_groups.extend(
+                        make_param_groups(
+                            model=self.encoder if self.world_size == 1 else self.encoder.module,
+                            weight_decay=self.optimization_weight_decay[0],
+                            decay_bias=self.optimization_decay_bias,
+                            decay_norm=self.optimization_decay_norm,
+                            lr=self.optimization_lr[0],
+                        )
+                    )
 
-                        if p.ndim > 1:
-                            decay_params.append(p)
-                        else:
-                            no_decay_params.append(p)
-
-                if self.optimization_exclude_bias_n_norm:
-                    param_groups = [
-                        {
-                            "params": decay_params,
-                            "weight_decay": self.optimization_weight_decay[0],
-                            "WD_exclude": False
-                        },
-                        {
-                            "params": no_decay_params,
-                            "weight_decay": 0.0,
-                            "WD_exclude": True
-                        },
-                    ]
-                else:
-                    param_groups = [
-                        {
-                            "params": decay_params + no_decay_params,
-                            "weight_decay": self.optimization_weight_decay[0],
-                            "WD_exclude": False
-                        },
-                    ]
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.linear_head if self.world_size == 1 else self.linear_head.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[1],
+                    )
+                )
 
                 self.optimizer = optim.SGD(
                     param_groups,
@@ -1134,13 +1116,37 @@ class Evaluation():
                 )
             
             case "lars":
-                param_list = [p for module in modules for p in module.parameters()]
+                param_groups = []
+
+                if self.meta_mode == "fine_tuning":
+                    param_groups.extend(
+                        make_param_groups(
+                            model=self.encoder if self.world_size == 1 else self.encoder.module,
+                            weight_decay=self.optimization_weight_decay[0],
+                            decay_bias=self.optimization_decay_bias,
+                            decay_norm=self.optimization_decay_norm,
+                            adapt_bias=self.optimization_adapt_bias,
+                            adapt_norm=self.optimization_adapt_norm,
+                            lr=self.optimization_lr[0],
+                        )
+                    )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.linear_head if self.world_size == 1 else self.linear_head.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
                 self.optimizer = LARS(
-                    param_list,
+                    params=param_groups,
                     lr=self.optimization_lr[0],
-                    momentum=0.9,
                     weight_decay=self.optimization_weight_decay[0],
-                    exclude_bias_n_norm=self.optimization_exclude_bias_n_norm,
                 )
 
             case _:
@@ -1221,7 +1227,10 @@ class Evaluation():
         self.optimization_epochs = int(self.config["optimization"]["epochs"])
         self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
         self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
-        self.optimization_exclude_bias_n_norm = bool(self.config["optimization"]["exclude_bias_n_norm"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
+        self.optimization_adapt_bias = bool(self.config["optimization"]["adapt_bias"])
+        self.optimization_adapt_norm = bool(self.config["optimization"]["adapt_norm"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

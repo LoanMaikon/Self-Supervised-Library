@@ -9,7 +9,7 @@ import copy
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
 from src.datasets import datasets
 from src.lars import LARS
@@ -43,18 +43,17 @@ class BarlowTwins():
         self.scaler = torch.amp.GradScaler()
 
         self.train_loss = []
-        self.lr_values_weights = []
+        self.lr_values = []
         self.wd_values = []
 
         if self.continue_training:
             self.last_epoch = get_last_epoch(self.output_folder)
             self.optimizer.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"optimizer.pth"), map_location=self.device))
-            self.lr_scheduler_weights.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler_weights.pth"), map_location=self.device))
-            self.lr_scheduler_biases.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler_biases.pth"), map_location=self.device))
+            self.lr_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"lr_scheduler.pth"), map_location=self.device))
             self.wd_scheduler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"wd_scheduler.pth"), map_location=self.device))
             self.scaler.load_state_dict(torch.load(os.path.join(self.output_folder, "models", "scaler.pth"), map_location=self.device))
             recreate_csv_log(self.output_folder, self.last_epoch)
-            self.lr_values_weights, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
+            self.lr_values, self.wd_values, _, self.train_loss = load_last_values(self.output_folder, self.last_epoch)
 
             write_on_log(f"Continuing training from epoch {self.last_epoch}...", self.output_folder)
 
@@ -76,7 +75,6 @@ class BarlowTwins():
                 self.optimizer.zero_grad()
 
                 x1, x2 = images[0].to(self.device, non_blocking=True), images[1].to(self.device, non_blocking=True)
-                self.adjust_learning_rate_biases()
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     loss = self.model(x1, x2)
@@ -89,13 +87,12 @@ class BarlowTwins():
                 self.train_loss[-1] += loss_value * x1.size(0)
                 num_samples += x1.size(0)
 
-                self.lr_values_weights.append(self.lr_scheduler_weights.get_value())
+                self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())
 
-                write_on_csv(self.output_folder, epoch, iteration, loss_value, self.lr_values_weights[-1], self.wd_values[-1])
+                write_on_csv(self.output_folder, epoch, iteration, loss_value, self.lr_values[-1], self.wd_values[-1])
 
-                self.lr_scheduler_weights.step()
-                self.lr_scheduler_biases.step()
+                self.lr_scheduler.step()
                 self.wd_scheduler.step()
             
             self.train_loss[-1] /= num_samples
@@ -105,7 +102,7 @@ class BarlowTwins():
             write_on_log(f"Loss: {self.train_loss[-1]}", self.output_folder)
 
             plot_fig(range(len(self.train_loss)), "Epoch", self.train_loss, "Loss", f"loss", self.output_folder)
-            plot_fig(range(len(self.lr_values_weights)), "Iteration", self.lr_values_weights, "Learning Rate", f"learning_rate", self.output_folder)
+            plot_fig(range(len(self.lr_values)), "Iteration", self.lr_values, "Learning Rate", f"learning_rate", self.output_folder)
             plot_fig(range(len(self.wd_values)), "Iteration", self.wd_values, "Weight Decay", f"weight_decay", self.output_folder)
 
             save_json({"train_loss": self.train_loss}, self.output_folder, "training_info")
@@ -122,50 +119,31 @@ class BarlowTwins():
 
         model_state_dict = self.model.module.state_dict() if self.world_size > 1 else self.model.state_dict()
         optimizer_state_dict = self.optimizer.state_dict()
-        lr_scheduler_weights_state_dict = self.lr_scheduler_weights.state_dict()
-        lr_scheduler_biases_state_dict = self.lr_scheduler_biases.state_dict()
+        lr_scheduler_state_dict = self.lr_scheduler.state_dict()
         wd_scheduler_state_dict = self.wd_scheduler.state_dict()
         scaler_state_dict = self.scaler.state_dict()
 
         torch.save({"model_state_dict": model_state_dict}, os.path.join(self.output_folder, "models", "model.pth"))
         torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", "optimizer.pth"))
-        torch.save(lr_scheduler_weights_state_dict, os.path.join(self.output_folder, "models", "lr_scheduler_weights.pth"))
-        torch.save(lr_scheduler_biases_state_dict, os.path.join(self.output_folder, "models", "lr_scheduler_biases.pth"))
+        torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", "lr_scheduler.pth"))
         torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", "wd_scheduler.pth"))
         torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", "scaler.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save({"model_state_dict": model_state_dict}, os.path.join(self.output_folder, "models", f"model_epoch_{epoch}.pth"))
             torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch_{epoch}.pth"))
-            torch.save(lr_scheduler_weights_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_weights_epoch_{epoch}.pth"))
-            torch.save(lr_scheduler_biases_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_biases_epoch_{epoch}.pth"))
+            torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
             torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
             torch.save(scaler_state_dict, os.path.join(self.output_folder, "models", f"scaler_epoch_{epoch}.pth"))
 
-    def adjust_learning_rate_biases(self):
-        for param_group in self.optimizer.param_groups:
-            if "bias" in param_group and param_group["bias"] == True:
-                 param_group["lr"] = self.lr_scheduler_biases.get_value()
-
     def _load_schedulers(self):
-        self.lr_scheduler_weights = WarmupCosineSchedule(
+        self.lr_scheduler = WarmupCosineSchedule(
             optimizer=self.optimizer,
             warmup_steps=self.optimization_warmup_epochs * len(self.train_dataloader),
-            start_lr=self.optimization_lr_weights[0],
-            middle_lr=self.optimization_lr_weights[1],
-            final_lr=self.optimization_lr_weights[2],
+            start_lr=self.optimization_lr[0],
+            middle_lr=self.optimization_lr[1],
+            final_lr=self.optimization_lr[2],
             T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
-            param_group_filter=lambda group: not group.get("bias", False)
-        )
-
-        self.lr_scheduler_biases = WarmupCosineSchedule(
-            optimizer=self.optimizer,
-            warmup_steps=self.optimization_warmup_epochs * len(self.train_dataloader),
-            start_lr=self.optimization_lr_biases[0],
-            middle_lr=self.optimization_lr_biases[1],
-            final_lr=self.optimization_lr_biases[2],
-            T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
-            param_group_filter=lambda group: group.get("bias", False)
         )
 
         self.wd_scheduler = CosineWDSchedule(
@@ -178,28 +156,23 @@ class BarlowTwins():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "lars":
-                param_weights = []
-                param_biases = []
-                for param in self.model.parameters():
-                    if not param.requires_grad:
-                        continue
-                    if param.ndim == 1:
-                        param_biases.append(param)
-                    else:
-                        param_weights.append(param)
+                param_groups = []
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.model if self.world_size == 1 else self.model.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
                 self.optimizer = LARS(
-                    [
-                        {"params": param_weights, "lr": self.optimization_lr_weights[0]},
-                        {
-                            "params": param_biases,
-                            "lr": self.optimization_lr_biases[0],
-                            "bias": True,
-                            "WD_exclude": True,
-                            "weight_decay": 0.0,
-                        },
-                    ],
-                    lr=self.optimization_lr_weights[0],
+                    params=param_groups,
+                    lr=self.optimization_lr[0],
                     weight_decay=self.optimization_weight_decay[0],
                 )
             
@@ -317,12 +290,15 @@ class BarlowTwins():
         self.meta_projector = list(map(int, self.config["meta"]["projector"]))
 
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
-        self.optimization_lr_weights = list(map(float, self.config["optimization"]["lr_weights"]))
-        self.optimization_lr_biases = list(map(float, self.config["optimization"]["lr_biases"]))
+        self.optimization_lr = list(map(float, self.config["optimization"]["lr"]))
         self.optimization_weight_decay = list(map(float, self.config["optimization"]["weight_decay"]))
         self.optimization_num_epochs = int(self.config["optimization"]["num_epochs"])
         self.optimization_warmup_epochs = int(self.config["optimization"]["warmup_epochs"])
         self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
         self.optimization_lambda = float(self.config["optimization"]["lambda"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
+        self.optimization_adapt_bias = bool(self.config["optimization"]["adapt_bias"])
+        self.optimization_adapt_norm = bool(self.config["optimization"]["adapt_norm"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

@@ -2,6 +2,7 @@ from torch.distributed.nn.functional import all_gather
 from time import strftime, localtime
 import torch.distributed as dist
 import matplotlib.pyplot as plt
+import torch.nn as nn
 import torch
 import json
 import math
@@ -197,3 +198,71 @@ class AllReduceSum(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grads):
         return grads
+
+_NORM_MODULES = (
+    nn.BatchNorm1d,
+    nn.BatchNorm2d,
+    nn.BatchNorm3d,
+    nn.SyncBatchNorm,
+    nn.LayerNorm,
+    nn.GroupNorm,
+    nn.InstanceNorm1d,
+    nn.InstanceNorm2d,
+    nn.InstanceNorm3d,
+)
+
+
+def make_param_groups(
+    model,
+    weight_decay,
+    decay_bias=True,
+    decay_norm=True,
+    adapt_bias=False,
+    adapt_norm=False,
+    lr=None,
+    fix_lr=False,
+):
+    param_groups = []
+
+    for module_name, module in model.named_modules():
+        is_norm_module = isinstance(module, _NORM_MODULES)
+
+        for param_name, param in module.named_parameters(recurse=False):
+            if not param.requires_grad:
+                continue
+
+            is_bias = param_name == "bias"
+            is_norm = is_norm_module
+
+            use_decay = True
+
+            if is_bias and not decay_bias:
+                use_decay = False
+
+            if is_norm and not decay_norm:
+                use_decay = False
+
+            group = {
+                "params": [param],
+                "weight_decay": weight_decay if use_decay else 0.0,
+                "weight_decay_exclude": not use_decay,
+
+                "is_bias": is_bias,
+                "is_norm": is_norm,
+
+                "decay_bias": decay_bias,
+                "decay_norm": decay_norm,
+
+                "adapt_bias": adapt_bias, # do not adapt bias by default for sgd and adamw
+                "adapt_norm": adapt_norm, # do not adapt norm by default  for sgd and adamw
+
+                "fix_lr": fix_lr,
+            }
+
+            if lr is not None:
+                group["lr"] = lr
+                group["initial_lr"] = lr
+
+            param_groups.append(group)
+
+    return param_groups

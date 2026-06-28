@@ -59,5 +59,8 @@ optimization:
   epochs: 90
   warmup_epochs: 0
   optimizer: lars
-  exclude_bias_n_norm: false
   criterion: cross_entropy
+  decay_bias: true
+  decay_norm: true
+  adapt_bias: true # Only applied with LARS
+  adapt_norm: true # Only applied with LARS

@@ -101,3 +101,5 @@ optimization:
   freeze_last_layer_epochs: 1
   sinkhorn_iterations: 3
   num_register_tokens: 0
+  decay_bias: false
+  decay_norm: false

@@ -6,7 +6,7 @@ import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, concat_all_gather, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from .NanoPark import nanopark_base, nanopark_large, nanopark_small, nanopark_tiny
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from .resnet import resnet50, projection_head
@@ -163,11 +163,38 @@ class SimCLR():
             T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
     
+    
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "lars":
+                param_groups = []
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.encoder if self.world_size == 1 else self.encoder.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.projection_head if self.world_size == 1 else self.projection_head.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
                 self.optimizer = LARS(
-                    list(self.encoder.parameters()) + list(self.projection_head.parameters()) if self.world_size == 1 else list(self.encoder.module.parameters()) + list(self.projection_head.module.parameters()),
+                    params=param_groups,
                     lr=self.optimization_lr[0],
                     weight_decay=self.optimization_weight_decay[0],
                 )
@@ -336,5 +363,9 @@ class SimCLR():
         self.optimization_temperature = float(self.config["optimization"]["temperature"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
+        self.optimization_adapt_bias = bool(self.config["optimization"]["adapt_bias"])
+        self.optimization_adapt_norm = bool(self.config["optimization"]["adapt_norm"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

@@ -99,5 +99,5 @@ optimization:
   center_momentum_patch: 0.9
   lambda1: 1.0 # dino
   lambda2: 1.0 # beit
-
-# Should get 73-75
+  decay_bias: false
+  decay_norm: false

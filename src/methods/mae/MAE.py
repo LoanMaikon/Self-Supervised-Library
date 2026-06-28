@@ -6,7 +6,7 @@ import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from src.datasets import datasets
 from .models import mae_vit_tiny_patch16, mae_vit_small_patch16, mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge_patch14
@@ -150,41 +150,30 @@ class MAE():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
-                target_modules = [self.model] if self.world_size == 1 else [self.model.module]
+                model = self.model if self.world_size == 1 else self.model.module
 
-                decay_params = []
-                no_decay_params = []
+                param_groups = []
 
-                for module in target_modules:
-                    for name, p in module.named_parameters():
-                        if not p.requires_grad:
-                            continue
-
-                        if p.ndim > 1 and "bias" not in name:
-                            decay_params.append(p)
-                        else:
-                            no_decay_params.append(p)
-
-                param_groups = [
-                    {
-                        "params": decay_params,
-                        "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False
-                    },
-                    {
-                        "params": no_decay_params,
-                        "weight_decay": 0.0,
-                        "WD_exclude": True
-                    },
-                ]
+                param_groups.extend(
+                    make_param_groups(
+                        model=model,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
                 self.optimizer = optim.AdamW(
                     param_groups,
                     lr=self.optimization_lr[0],
+                    betas=(0.9, 0.95),
                 )
 
             case _:
-                raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
+                raise ValueError(
+                    f"Unsupported optimizer: {self.optimization_optimizer}"
+                )
 
     def _load_dataloader(self):
         self.train_dataset = datasets(
@@ -288,5 +277,7 @@ class MAE():
         self.optimization_epochs = int(self.config['optimization']['epochs'])
         self.optimization_warmup_epochs = int(self.config['optimization']['warmup_epochs'])
         self.optimization_optimizer = str(self.config['optimization']['optimizer'])
+        self.optimization_decay_bias = bool(self.config['optimization']['decay_bias'])
+        self.optimization_decay_norm = bool(self.config['optimization']['decay_norm'])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

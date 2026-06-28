@@ -52,3 +52,7 @@ optimization:
   optimizer: lars
   temperature: 0.1
   criterion: nt_xent
+  decay_bias: false
+  decay_norm: false
+  adapt_bias: false
+  adapt_norm: false

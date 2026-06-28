@@ -56,3 +56,7 @@ optimization:
   warmup_epochs: 10
   optimizer: lars
   criterion: byol_loss
+  decay_bias: false
+  decay_norm: false
+  adapt_bias: false
+  adapt_norm: false

@@ -9,7 +9,7 @@ import copy
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
     LinearWarmupTemperatureSchedule
 from src.methods.dinov2.mask_collator import MaskingGenerator, collate_data_and_cast
@@ -171,7 +171,7 @@ class DINOv2():
                     ]
 
                     _attn_bias, cat_inputs = fmha.BlockDiagonalMask.from_tensor_list(inputs_for_student_head_list)
-                    outputs_list = _attn_bias.split(self.projection_head_cls(cat_inputs)) ##### NEED TO FIX THE PROJECTION HEAD, GET ORIGINAL FROM DINOV2
+                    outputs_list = _attn_bias.split(self.projection_head_cls(cat_inputs))
 
                     # 3a: local crops cls tokens
                     student_local_cls_tokens_after_head = outputs_list.pop(0).squeeze(0)
@@ -424,33 +424,37 @@ class DINOv2():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "adamw":
-                target_modules = [self.encoder, self.projection_head_cls, self.projection_head_patch] if self.world_size == 1 else [self.encoder.module, self.projection_head_cls.module, self.projection_head_patch.module]
+                param_groups = []
 
-                decay_params = []
-                no_decay_params = []
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.encoder if self.world_size == 1 else self.encoder.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
-                for module in target_modules:
-                    for name, p in module.named_parameters():
-                        if not p.requires_grad:
-                            continue
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.projection_head_cls if self.world_size == 1 else self.projection_head_cls.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
-                        if p.ndim > 1 and "bias" not in name:
-                            decay_params.append(p)
-                        else:
-                            no_decay_params.append(p)
-
-                param_groups = [
-                    {
-                        "params": decay_params,
-                        "weight_decay": self.optimization_weight_decay[0],
-                        "WD_exclude": False
-                    },
-                    {
-                        "params": no_decay_params,
-                        "weight_decay": 0.0,
-                        "WD_exclude": True
-                    },
-                ]
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.projection_head_patch if self.world_size == 1 else self.projection_head_patch.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
 
                 self.optimizer = optim.AdamW(
                     param_groups,
@@ -458,7 +462,9 @@ class DINOv2():
                 )
 
             case _:
-                raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
+                raise ValueError(
+                    f"Unsupported optimizer: {self.optimization_optimizer}"
+                )
 
     def _load_dataloader(self):
         masking_generator = MaskingGenerator(
@@ -707,5 +713,7 @@ class DINOv2():
         self.optimization_freeze_last_layer_epochs = int(self.config['optimization']['freeze_last_layer_epochs'])
         self.optimization_sinkhorn_iterations = int(self.config['optimization']['sinkhorn_iterations'])
         self.optimization_num_register_tokens = int(self.config['optimization']['num_register_tokens'])
+        self.optimization_decay_bias = bool(self.config['optimization']['decay_bias'])
+        self.optimization_decay_norm = bool(self.config['optimization']['decay_norm'])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

@@ -84,3 +84,5 @@ optimization:
   use_entropy: false
   entropy_regularization_weight: 0.0
   softmax_temperature: 0.1
+  decay_bias: false
+  decay_norm: false

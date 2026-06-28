@@ -7,7 +7,7 @@ import copy
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule
 from .resnet import resnet50, mlp_head
 from .byol_loss import byol_loss
@@ -79,8 +79,10 @@ class BYOL():
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     z_online_1 = self.encoder_prediction_head(self.encoder_projection_head(self.encoder(x1)))
                     z_online_2 = self.encoder_prediction_head(self.encoder_projection_head(self.encoder(x2)))
-                    z_target_1 = self.target_encoder_projection_head(self.target_encoder(x1))
-                    z_target_2 = self.target_encoder_projection_head(self.target_encoder(x2))
+
+                    with torch.no_grad():
+                        z_target_1 = self.target_encoder_projection_head(self.target_encoder(x1))
+                        z_target_2 = self.target_encoder_projection_head(self.target_encoder(x2))
 
                     loss = self.apply_criterion(z_online_1, z_online_2, z_target_1, z_target_2)
 
@@ -194,8 +196,46 @@ class BYOL():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "lars":
+                param_groups = []
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.encoder if self.world_size == 1 else self.encoder.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.encoder_projection_head if self.world_size == 1 else self.encoder_projection_head.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.encoder_prediction_head if self.world_size == 1 else self.encoder_prediction_head.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
                 self.optimizer = LARS(
-                    list(self.encoder.parameters()) + list(self.encoder_projection_head.parameters()) + list(self.encoder_prediction_head.parameters()) if self.world_size == 1 else list(self.encoder.module.parameters()) + list(self.encoder_projection_head.module.parameters()) + list(self.encoder_prediction_head.module.parameters()),
+                    params=param_groups,
                     lr=self.optimization_lr[0],
                     weight_decay=self.optimization_weight_decay[0],
                 )
@@ -396,5 +436,9 @@ class BYOL():
         self.optimization_optimizer = str(self.config["optimization"]["optimizer"])
         self.optimization_criterion = str(self.config["optimization"]["criterion"])
         self.optimization_ipe_scale = float(self.config["optimization"]["ipe_scale"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
+        self.optimization_adapt_bias = bool(self.config["optimization"]["adapt_bias"])
+        self.optimization_adapt_norm = bool(self.config["optimization"]["adapt_norm"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

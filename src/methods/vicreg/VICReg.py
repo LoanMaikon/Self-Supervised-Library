@@ -6,7 +6,7 @@ import torch
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
-    recreate_csv_log, get_last_epoch, load_last_values
+    recreate_csv_log, get_last_epoch, load_last_values, make_param_groups
 from .models import resnet34, resnet50, resnet101, resnet50x2, resnet50x4, resnet50x5, \
     resnet200x2, projection_head
 from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
@@ -187,15 +187,40 @@ class VICReg():
     def _load_optimizer(self):
         match self.optimization_optimizer:
             case "lars":
+                param_groups = []
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.encoder if self.world_size == 1 else self.encoder.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
+                param_groups.extend(
+                    make_param_groups(
+                        model=self.projection_head if self.world_size == 1 else self.projection_head.module,
+                        weight_decay=self.optimization_weight_decay[0],
+                        decay_bias=self.optimization_decay_bias,
+                        decay_norm=self.optimization_decay_norm,
+                        adapt_bias=self.optimization_adapt_bias,
+                        adapt_norm=self.optimization_adapt_norm,
+                        lr=self.optimization_lr[0],
+                    )
+                )
+
                 self.optimizer = LARS(
-                    list(self.encoder.parameters()) + list(self.projection_head.parameters()) if self.world_size == 1 else list(self.encoder.module.parameters()) + list(self.projection_head.module.parameters()),
+                    params=param_groups,
                     lr=self.optimization_lr[0],
                     weight_decay=self.optimization_weight_decay[0],
                 )
             
             case _:
                 raise ValueError(f"Unsupported optimizer: {self.optimization_optimizer}")
-
 
     def _load_dataloader(self):
         self.train_dataset = datasets(
@@ -338,5 +363,9 @@ class VICReg():
         self.optimization_inv_coeff = float(self.config["optimization"]["inv_coeff"])
         self.optimization_std_coeff = float(self.config["optimization"]["std_coeff"])
         self.optimization_cov_coeff = float(self.config["optimization"]["cov_coeff"])
+        self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+        self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
+        self.optimization_adapt_bias = bool(self.config["optimization"]["adapt_bias"])
+        self.optimization_adapt_norm = bool(self.config["optimization"]["adapt_norm"])
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

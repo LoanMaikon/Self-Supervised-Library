@@ -73,3 +73,7 @@ optimization:
   num_prototypes: 3000
   queue_length: 3840
   queue_start_epoch: 15
+  decay_bias: true
+  decay_norm: true
+  adapt_bias: true
+  adapt_norm: true

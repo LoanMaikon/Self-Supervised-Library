@@ -59,5 +59,8 @@ optimization:
   epochs: 90
   warmup_epochs: 10
   optimizer: sgd
-  exclude_bias_n_norm: true
   criterion: cross_entropy
+  decay_bias: false
+  decay_norm: false
+  adapt_bias: false # Only applied with LARS
+  adapt_norm: false # Only applied with LARS

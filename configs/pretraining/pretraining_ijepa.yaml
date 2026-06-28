@@ -67,3 +67,5 @@ optimization:
   warmup_epochs: 15
   optimizer: adamw
   criterion: l1_smooth_loss
+  decay_bias: false
+  decay_norm: false

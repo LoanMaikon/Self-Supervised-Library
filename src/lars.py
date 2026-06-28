@@ -1,31 +1,18 @@
-# Code mostly from https://github.com/facebookresearch/mae/blob/main/util/lars.py
-
 import torch
-
+import torch.nn as nn
 
 class LARS(torch.optim.Optimizer):
-    """
-    exclude_bias_n_norm:
-        If True, skips LARS scaling + weight decay
-        for p.ndim <= 1. If False, bias and normalization parameters are also
-        adapted by LARS and receive weight decay.
-
-    clip:
-        If False, behaves like LARC with clip=False:
-            update = lr * local_lr * grad
-        If True, behaves like LARC clipping:
-            update = min(local_lr, lr) * grad
-        That means scaling the
-        gradient by min(local_lr / lr, 1).
-    """
     def __init__(
         self,
         params,
-        lr=0,
-        weight_decay=0,
+        lr=0.0,
+        weight_decay=0.0,
         momentum=0.9,
         trust_coefficient=0.001,
-        exclude_bias_n_norm=True,
+        decay_bias=False,
+        decay_norm=False,
+        adapt_bias=False,
+        adapt_norm=False,
         clip=False,
         eps=1e-8,
     ):
@@ -34,59 +21,103 @@ class LARS(torch.optim.Optimizer):
             weight_decay=weight_decay,
             momentum=momentum,
             trust_coefficient=trust_coefficient,
-            exclude_bias_n_norm=exclude_bias_n_norm,
+            decay_bias=decay_bias,
+            decay_norm=decay_norm,
+            adapt_bias=adapt_bias,
+            adapt_norm=adapt_norm,
             clip=clip,
             eps=eps,
+            is_bias=False,
+            is_norm=False,
         )
+
         super().__init__(params, defaults)
+
+    @staticmethod
+    def _should_apply_weight_decay(group):
+        is_bias = group.get("is_bias", False)
+        is_norm = group.get("is_norm", False)
+
+        if is_bias and not group["decay_bias"]:
+            return False
+
+        if is_norm and not group["decay_norm"]:
+            return False
+
+        return True
+
+    @staticmethod
+    def _should_apply_lars_adaptation(group):
+        is_bias = group.get("is_bias", False)
+        is_norm = group.get("is_norm", False)
+
+        if is_bias and not group["adapt_bias"]:
+            return False
+
+        if is_norm and not group["adapt_norm"]:
+            return False
+
+        return True
 
     @torch.no_grad()
     def step(self, closure=None):
         loss = None
+
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
 
-        for g in self.param_groups:
-            lr = g["lr"]
+        for group in self.param_groups:
+            lr = group["lr"]
+            momentum = group["momentum"]
+            weight_decay = group["weight_decay"]
 
-            for p in g["params"]:
-                dp = p.grad
+            apply_weight_decay = self._should_apply_weight_decay(group)
+            apply_lars_adaptation = self._should_apply_lars_adaptation(group)
 
-                if dp is None:
+            for p in group["params"]:
+                if p.grad is None:
                     continue
 
-                use_lars = (p.ndim > 1) or (not g["exclude_bias_n_norm"])
+                if p.grad.is_sparse:
+                    raise RuntimeError("LARS does not support sparse gradients")
 
-                if use_lars:
-                    if g["weight_decay"] != 0:
-                        dp = dp.add(p, alpha=g["weight_decay"])
+                dp = p.grad
 
+                if weight_decay != 0 and apply_weight_decay:
+                    dp = dp.add(p, alpha=weight_decay)
+
+                if apply_lars_adaptation:
                     param_norm = torch.norm(p)
                     update_norm = torch.norm(dp)
+
                     one = torch.ones_like(param_norm)
 
                     q = torch.where(
-                        param_norm > 0.,
+                        param_norm > 0,
                         torch.where(
-                            update_norm > 0.,
-                            g["trust_coefficient"] * param_norm / (update_norm + g["eps"]),
+                            update_norm > 0,
+                            group["trust_coefficient"]
+                            * param_norm
+                            / (update_norm + group["eps"]),
                             one,
                         ),
                         one,
                     )
 
-                    if g["clip"] and lr > 0:
+                    if group["clip"] and lr > 0:
                         q = torch.minimum(q / lr, one)
 
                     dp = dp.mul(q)
 
-                param_state = self.state[p]
-                if "mu" not in param_state:
-                    param_state["mu"] = torch.zeros_like(p)
+                state = self.state[p]
 
-                mu = param_state["mu"]
-                mu.mul_(g["momentum"]).add_(dp)
+                if "mu" not in state:
+                    state["mu"] = torch.zeros_like(p)
+
+                mu = state["mu"]
+                mu.mul_(momentum).add_(dp)
+
                 p.add_(mu, alpha=-lr)
 
         return loss

@@ -52,3 +52,5 @@ optimization:
   warmup_epochs: 0
   optimizer: sgd
   criterion: cosine_similarity
+  decay_bias: true
+  decay_norm: true

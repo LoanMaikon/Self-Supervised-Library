@@ -54,3 +54,5 @@ optimization:
   optimizer: sgd
   temperature: 0.07
   criterion: nt_xent
+  decay_bias: false
+  decay_norm: false

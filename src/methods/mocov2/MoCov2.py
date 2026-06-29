@@ -296,3 +296,5 @@ class MoCov2():
         self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
         self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
         self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+
+        self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

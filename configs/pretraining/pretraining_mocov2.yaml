@@ -1,11 +1,11 @@
 mode: mocov2
 
 data:
-  datasets_path: /home/lmk22/datasets
+  datasets_path: /disk3/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 256 # For each device, so the effective batch size is batch_size * num_devices
+  batch_size: 128 # 2 gpu
   crop_size: 224
-  num_workers: 64 # For each device, so the effective number of workers is num_workers * num_devices
+  num_workers: 12 # 2 gpu
   prefetch_factor: 1
   pin_memory: false
   drop_last: true
@@ -49,7 +49,7 @@ optimization:
   weight_decay:
     - 0.0001
     - 0.0001
-  num_epochs: 100
+  num_epochs: 200
   warmup_epochs: 0
   optimizer: sgd
   temperature: 0.07

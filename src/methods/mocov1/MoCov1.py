@@ -208,8 +208,8 @@ class MoCov1():
     def _load_transform(self):
         # Pseudo code of Apendix A from SimCLR paper
         def __get_color_distortion(strength=1.0):
-            collor_jitter = v2.ColorJitter(0.4 * strength, 0.4 * strength, 0.4 * strength, 0.1 * strength)
-            rnd_color_jitter = v2.RandomApply([collor_jitter], p=0.8)
+            collor_jitter = v2.ColorJitter(0.4 * strength, 0.4 * strength, 0.4 * strength, 0.4 * strength)
+            rnd_color_jitter = v2.RandomApply([collor_jitter], p=1.0)
             rnd_gray = v2.RandomGrayscale(p=0.2)
 
             return v2.Compose([rnd_color_jitter, rnd_gray])
@@ -296,3 +296,5 @@ class MoCov1():
         self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
         self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
         self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
+
+        self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

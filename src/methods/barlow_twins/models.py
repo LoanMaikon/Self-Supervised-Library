@@ -51,11 +51,11 @@ class Model_barlow_twins(nn.Module):
         c = self.bn(z1).T @ self.bn(z2)
 
         # sum the cross-correlation matrix between all gpus
-        batch_size_per_gpu = self.batch_size
-        global_batch_size = batch_size_per_gpu * self.world_size
-        c.div_(global_batch_size)
+        batch_size = torch.tensor(z1.size(0), device=c.device, dtype=c.dtype)
         if torch.distributed.is_initialized():
             torch.distributed.all_reduce(c)
+            torch.distributed.all_reduce(batch_size)
+        c.div_(batch_size.clamp_min(1.0))
 
         on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
         off_diag = off_diagonal(c).pow_(2).sum()

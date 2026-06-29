@@ -106,6 +106,8 @@ class DINOv2():
 
                 n_local_crops_loss_terms = max(self.data_local_views_num * self.data_global_views_num, 1)
                 n_global_crops_loss_terms = (self.data_global_views_num - 1) * self.data_global_views_num
+                self.dino_loss.student_temp = self.student_cls_temperature_scheduler.get_value()
+                self.ibot_loss.student_temp = self.student_patch_temperature_scheduler.get_value()
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     with torch.no_grad(): # Teacher outputs

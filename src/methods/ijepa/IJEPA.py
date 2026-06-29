@@ -164,7 +164,7 @@ class IJEPA():
     
     def update_target_network(self, ema):
         encoder_module = self.encoder.module if self.world_size > 1 else self.encoder
-        target_encoder_module = self.target_encoder.module if self.world_size > 1 else self.target
+        target_encoder_module = self.target_encoder
 
         with torch.no_grad():
             for param_q, param_k in zip(encoder_module.parameters(), target_encoder_module.parameters()):

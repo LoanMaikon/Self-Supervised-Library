@@ -3,22 +3,6 @@ import torch
 import yaml
 import os
 
-from src.methods.barlow_twins.BarlowTwins import BarlowTwins
-from src.methods.evaluation.Evaluation import Evaluation
-from src.methods.simsiam.SimSiam import SimSiam
-from src.methods.dinov1.DINOv1 import DINOv1
-from src.methods.dinov2.DINOv2 import DINOv2
-from src.methods.simclr.SimCLR import SimCLR
-from src.methods.vicreg.VICReg import VICReg
-from src.methods.mocov1.MoCov1 import MoCov1
-from src.methods.mocov2.MoCov2 import MoCov2
-from src.methods.ijepa.IJEPA import IJEPA
-from src.methods.swav.SwAV import SwAV
-from src.methods.byol.BYOL import BYOL
-from src.methods.ibot.iBOT import iBOT
-from src.methods.msn.MSN import MSN
-from src.methods.mae.MAE import MAE
-
 from src.utils import is_main_process
 
 class Model():
@@ -82,6 +66,8 @@ class Model():
 
         match self.mode:
             case "evaluate":
+                from src.methods.evaluation.Evaluation import Evaluation
+
                 self.method = Evaluation(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -93,6 +79,8 @@ class Model():
                 )
 
             case "simclr":
+                from src.methods.simclr.SimCLR import SimCLR
+
                 self.method = SimCLR(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -103,6 +91,8 @@ class Model():
                 )
 
             case "byol":
+                from src.methods.byol.BYOL import BYOL
+
                 self.method = BYOL(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -113,6 +103,8 @@ class Model():
                 )
 
             case "ijepa":
+                from src.methods.ijepa.IJEPA import IJEPA
+
                 self.method = IJEPA(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -123,6 +115,8 @@ class Model():
                 )
             
             case "swav":
+                from src.methods.swav.SwAV import SwAV
+
                 self.method = SwAV(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -133,6 +127,8 @@ class Model():
                 )
 
             case "mae":
+                from src.methods.mae.MAE import MAE
+
                 self.method = MAE(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -143,6 +139,8 @@ class Model():
                 )
             
             case "dinov1":
+                from src.methods.dinov1.DINOv1 import DINOv1
+
                 self.method = DINOv1(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -153,6 +151,8 @@ class Model():
                 )
 
             case "ibot":
+                from src.methods.ibot.iBOT import iBOT
+
                 self.method = iBOT(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -163,6 +163,8 @@ class Model():
                 )
             
             case "dinov2":
+                from src.methods.dinov2.DINOv2 import DINOv2
+
                 self.method = DINOv2(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -173,6 +175,8 @@ class Model():
                 )
             
             case "barlow_twins":
+                from src.methods.barlow_twins.BarlowTwins import BarlowTwins
+
                 self.method = BarlowTwins(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -183,6 +187,8 @@ class Model():
                 )
             
             case "vicreg":
+                from src.methods.vicreg.VICReg import VICReg
+
                 self.method = VICReg(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -193,6 +199,8 @@ class Model():
                 )
             
             case "simsiam":
+                from src.methods.simsiam.SimSiam import SimSiam
+
                 self.method = SimSiam(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -203,6 +211,8 @@ class Model():
                 )
             
             case "msn":
+                from src.methods.msn.MSN import MSN
+
                 self.method = MSN(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -213,6 +223,8 @@ class Model():
                 )
             
             case "mocov1":
+                from src.methods.mocov1.MoCov1 import MoCov1
+
                 self.method = MoCov1(
                     opened_config=self.config,
                     output_folder=self.output_folder,
@@ -223,6 +235,8 @@ class Model():
                 )
             
             case "mocov2":
+                from src.methods.mocov2.MoCov2 import MoCov2
+
                 self.method = MoCov2(
                     opened_config=self.config,
                     output_folder=self.output_folder,

@@ -72,6 +72,7 @@ class VICReg():
                 self.optimizer.zero_grad()
 
                 x1, x2 = images[0].to(self.device, non_blocking=True), images[1].to(self.device, non_blocking=True)
+                batch_size = x1.size(0)
 
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     x1 = self.projection_head(self.encoder(x1))
@@ -85,8 +86,8 @@ class VICReg():
                         x1 = torch.cat(FullGatherLayer.apply(x1), dim=0)
                         x2 = torch.cat(FullGatherLayer.apply(x2), dim=0)
 
-                    x1 -= x1.mean(dim=0)
-                    x2 -= x2.mean(dim=0)
+                    x1 = x1 - x1.mean(dim=0)
+                    x2 = x2 - x2.mean(dim=0)
 
                     std_x1 = torch.sqrt(x1.var(dim=0) + 0.0001)
                     std_x2 = torch.sqrt(x2.var(dim=0) + 0.0001)
@@ -102,7 +103,7 @@ class VICReg():
                     off_diagonal_x1 = cov_x1.flatten()[:-1].view(cov_x1.shape[0] - 1, cov_x1.shape[0] + 1)[:, 1:].flatten()
                     off_diagonal_x2 = cov_x2.flatten()[:-1].view(cov_x2.shape[0] - 1, cov_x2.shape[0] + 1)[:, 1:].flatten()
                     
-                    cov_loss = off_diagonal_x1.pow_(2).sum().div(x1.shape[1]) + off_diagonal_x2.pow_(2).sum().div(x1.shape[1])
+                    cov_loss = off_diagonal_x1.pow(2).sum().div(x1.shape[1]) + off_diagonal_x2.pow(2).sum().div(x1.shape[1])
 
                     loss = self.optimization_inv_coeff * invariance_loss + self.optimization_std_coeff * std_loss + self.optimization_cov_coeff * cov_loss
 
@@ -111,8 +112,8 @@ class VICReg():
                 self.scaler.update()
 
                 loss_value = loss.item()
-                self.train_loss[-1] += loss_value * x1.size(0)
-                num_samples += x1.size(0)
+                self.train_loss[-1] += loss_value * batch_size
+                num_samples += batch_size
 
                 self.lr_values.append(self.lr_scheduler.get_value())
                 self.wd_values.append(self.wd_scheduler.get_value())

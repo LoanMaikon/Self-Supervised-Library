@@ -95,6 +95,68 @@ class WarmupCosineSchedule:
         self.actual_value = new_lr
 
         return new_lr
+
+class MultiStepSchedule:
+    def __init__(
+        self,
+        optimizer,
+        base_lr,
+        milestones,
+        gamma=0.1,
+        param_group_filter=None,
+    ):
+        self.optimizer = optimizer
+        self.base_lr = base_lr
+        self.milestones = sorted(int(milestone) for milestone in milestones)
+        self.gamma = gamma
+        self.param_group_filter = param_group_filter
+
+        self._step = 0
+        self.actual_value = base_lr
+
+        for group in self.optimizer.param_groups:
+            group.setdefault("initial_lr", group["lr"])
+
+        self._apply(base_lr)
+
+    def get_value(self):
+        return self.actual_value
+
+    def state_dict(self):
+        return {
+            "_step": self._step,
+            "actual_value": self.actual_value,
+        }
+
+    def load_state_dict(self, state_dict):
+        self._step = state_dict["_step"]
+        self.actual_value = state_dict["actual_value"]
+        self._apply(self.actual_value)
+
+    def _compute_value(self, step):
+        drops = sum(step >= milestone for milestone in self.milestones)
+        return self.base_lr * (self.gamma ** drops)
+
+    def _apply(self, lr):
+        for group in self.optimizer.param_groups:
+            if self.param_group_filter is not None:
+                if not self.param_group_filter(group):
+                    continue
+
+            if group.get("fix_lr", False):
+                group["lr"] = group["initial_lr"]
+            else:
+                lr_scale = group.get("lr_scale", 1.0)
+                group["lr"] = lr * lr_scale
+
+    def step(self):
+        self._step += 1
+
+        new_lr = self._compute_value(self._step)
+        self._apply(new_lr)
+        self.actual_value = new_lr
+
+        return new_lr
     
 class CosineWDSchedule:
     def __init__(

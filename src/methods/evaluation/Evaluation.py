@@ -14,8 +14,6 @@ from src.methods.simclr.resnet import resnet50 as simclr_resnet50
 from src.methods.swav.resnet import resnet50 as swav_resnet50
 from src.methods.ijepa.models import vit_tiny as ijepa_vit_tiny, vit_small as ijepa_vit_small, vit_base as ijepa_vit_base, \
     vit_large as ijepa_vit_large, vit_huge as ijepa_vit_huge, vit_giant as ijepa_vit_giant
-from src.methods.dinov2.models import vit_tiny as dinov2_vit_tiny, vit_small as dinov2_vit_small, vit_base as dinov2_vit_base, \
-    vit_large as dinov2_vit_large, vit_giant2 as dinov2_vit_giant
 from src.methods.mae.models import mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge_patch14, mae_vit_small_patch16, mae_vit_tiny_patch16
 from src.methods.dinov1.models import vit_tiny as dinov1_vit_tiny, vit_small as dinov1_vit_small, vit_base as dinov1_vit_base
 from src.methods.ibot.models import vit_base as ibot_vit_base, vit_large as ibot_vit_large, vit_small as ibot_vit_small, vit_tiny as ibot_vit_tiny
@@ -366,7 +364,7 @@ class Evaluation():
 
                 case "byol":
                     try:
-                        self.encoder = byol_resnet50(self.meta_checkpoint)
+                        self.encoder = byol_resnet50(use_checkpoint=self.meta_checkpoint)
                         self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
                         self.model_type = "byol_resnet50"
                         return
@@ -589,8 +587,11 @@ class Evaluation():
                         return
                     except Exception as e:
                         errors.append(("ibot_vit_large_16", str(e)))
-                
+
                 case "dinov2":
+                    from src.methods.dinov2.models import vit_tiny as dinov2_vit_tiny, vit_small as dinov2_vit_small, vit_base as dinov2_vit_base, \
+                        vit_large as dinov2_vit_large, vit_giant2 as dinov2_vit_giant
+
                     try:
                         self.encoder = dinov2_vit_tiny(use_checkpoint=self.meta_checkpoint, patch_size=16)
                         self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None

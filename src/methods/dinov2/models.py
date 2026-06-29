@@ -839,7 +839,7 @@ class DinoVisionTransformer(nn.Module):
 
         for blk in self.blocks:
             if self.use_checkpoint:
-                x = torch.utils.checkpoint.checkpoint.checkpoint(blk, x)
+                x = torch.utils.checkpoint.checkpoint(blk, x)
             else:
                 x = blk(x)
 
@@ -859,7 +859,7 @@ class DinoVisionTransformer(nn.Module):
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
         for i, blk in enumerate(self.blocks):
             if self.use_checkpoint:
-                x = torch.utils.checkpoint.checkpoint.checkpoint(blk, x)
+                x = torch.utils.checkpoint.checkpoint(blk, x)
             else:
                 x = blk(x)
             if i in blocks_to_take:
@@ -875,7 +875,7 @@ class DinoVisionTransformer(nn.Module):
         for block_chunk in self.blocks:
             for blk in block_chunk[i:]:  # Passing the nn.Identity()
                 if self.use_checkpoint:
-                    x = torch.utils.checkpoint.checkpoint.checkpoint(blk, x)
+                    x = torch.utils.checkpoint.checkpoint(blk, x)
                 else:
                     x = blk(x)
                 if i in blocks_to_take:

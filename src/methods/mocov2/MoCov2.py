@@ -14,7 +14,7 @@ from src.schedulers import WarmupCosineSchedule, CosineWDSchedule
 from src.datasets import datasets
 from .models import resnet50
 
-class MoCov1():
+class MoCov2():
     def __init__(self,
                  opened_config,
                  output_folder,

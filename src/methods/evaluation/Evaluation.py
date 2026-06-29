@@ -25,6 +25,7 @@ from src.methods.vicreg.models import resnet50 as vicreg_resnet50, resnet34 as v
 from src.methods.msn.models import deit_tiny as msn_deit_tiny, deit_small as msn_deit_small, deit_small_p8 as msn_deit_small_p8, deit_small_p7 as msn_deit_small_p7, vitc_4gf as msn_vitc_4gf, deit_small_convstem as msn_deit_small_convstem, \
     deit_base_p8 as msn_deit_base_p8, deit_base_p7 as msn_deit_base_p7, deit_base_p4 as msn_deit_base_p4, deit_base as msn_deit_base, deit_large_p7 as msn_deit_large_p7, deit_large_p8 as msn_deit_large_p8, deit_large as msn_deit_large, deit_huge as msn_deit_huge, deit_huge_p8 as msn_deit_huge_p8, deit_huge_p7 as msn_deit_huge_p7, deit_huge_p10 as msn_deit_huge_p10
 from src.methods.mocov1.models import resnet50 as mocov1_resnet50
+from src.methods.mocov2.models import resnet50 as mocov2_resnet50
 from .resnet50 import resnet50 as resnet50_eval
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
@@ -900,14 +901,23 @@ class Evaluation():
                     except Exception as e:
                         errors.append(("msn_deit_huge_p8", str(e)))
                 
-                case "moco":
+                case "mocov1":
                     try:
-                        self.encoder = moco_resnet50(use_checkpoint=self.meta_checkpoint)
+                        self.encoder = mocov1_resnet50(use_checkpoint=self.meta_checkpoint)
                         self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
-                        self.model_type = "moco_resnet50"
+                        self.model_type = "mocov1_resnet50"
                         return
                     except Exception as e:
-                        errors.append(("moco_resnet50", str(e)))
+                        errors.append(("mocov1_resnet50", str(e)))
+
+                case "mocov2":
+                    try:
+                        self.encoder = mocov2_resnet50(use_checkpoint=self.meta_checkpoint)
+                        self.encoder.load_weights(self.evaluate_weights, device=self.device) if load_weights else None
+                        self.model_type = "mocov2_resnet50"
+                        return
+                    except Exception as e:
+                        errors.append(("mocov2_resnet50", str(e)))
 
                 case _:
                     errors.append(("unknown_framework", f"Unsupported framework: {self.meta_framework}"))

@@ -24,6 +24,8 @@ The following self-supervised methods are currently available:
 - VICReg
 - SimSiam
 - MSN
+- MoCov1
+- MoCov2
 
 This library aims to provide:
 

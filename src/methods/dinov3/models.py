@@ -963,6 +963,117 @@ class DinoVisionTransformer(nn.Module):
         else:
             return self.head(ret["x_norm_clstoken"])
         
+    def load_weights(self, weight_path, device):
+        checkpoint = torch.load(weight_path, map_location=device)
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        clean_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+
+        def _remap_chunked_blocks(sd):
+            if not self.chunked_blocks:
+                return sd
+
+            has_chunked = any(k.startswith("blocks.0.0.") for k in sd.keys())
+            has_unchunked = any(k.startswith("blocks.0.") and not k.startswith("blocks.0.0.") for k in sd.keys())
+            if not has_unchunked or has_chunked:
+                return sd
+
+            block_to_chunk = {}
+            for chunk_idx, block_chunk in enumerate(self.blocks):
+                for block_idx, block in enumerate(block_chunk):
+                    if any(True for _ in block.parameters()):
+                        block_to_chunk[block_idx] = chunk_idx
+
+            remapped = {}
+            for key, value in sd.items():
+                if key.startswith("blocks."):
+                    parts = key.split(".")
+                    if len(parts) > 2 and parts[1].isdigit():
+                        block_idx = int(parts[1])
+                        chunk_idx = block_to_chunk.get(block_idx, 0)
+                        new_key = ".".join(["blocks", str(chunk_idx), str(block_idx)] + parts[2:])
+                        remapped[new_key] = value
+                        continue
+                remapped[key] = value
+            return remapped
+
+        def _resize_pos_embed_if_needed(sd):
+            if "pos_embed" not in sd:
+                return sd
+
+            pos_embed = sd["pos_embed"]
+            if pos_embed.shape == self.pos_embed.shape:
+                print("pos_embed shape matches, no interpolation needed")
+                return sd
+
+            cls_pos = pos_embed[:, :1]
+            patch_pos = pos_embed[:, 1:]
+            embed_dim = patch_pos.shape[-1]
+            old_size = int(math.sqrt(patch_pos.shape[1]))
+            new_size = int(math.sqrt(self.patch_embed.num_patches))
+
+            if old_size * old_size != patch_pos.shape[1] or new_size * new_size != self.patch_embed.num_patches:
+                return sd
+
+            orig_dtype = patch_pos.dtype
+            patch_pos = patch_pos.float()
+            cls_pos = cls_pos.float()
+
+            patch_pos = patch_pos.reshape(1, old_size, old_size, embed_dim).permute(0, 3, 1, 2)
+            patch_pos = F.interpolate(
+                patch_pos,
+                size=(new_size, new_size),
+                mode="bicubic",
+                antialias=self.interpolate_antialias,
+            )
+            patch_pos = patch_pos.permute(0, 2, 3, 1).reshape(1, new_size * new_size, embed_dim)
+
+            sd["pos_embed"] = torch.cat((cls_pos, patch_pos), dim=1).to(orig_dtype)
+            return sd
+
+        clean_state_dict = _remap_chunked_blocks(clean_state_dict)
+        clean_state_dict = _resize_pos_embed_if_needed(clean_state_dict)
+
+        errors = []
+        try:
+            self.load_state_dict(clean_state_dict)
+            return
+        except Exception as e:
+            errors.append(("state_dict", str(e)))
+
+        raise ValueError(
+            f"Failed to load weights from {weight_path}. "
+            f"Tried: {clean_state_dict.keys()}"
+        )
+
+    def freeze(self):
+        for param in self.parameters():
+            param.requires_grad = False
+
+    def unfreeze(self):
+        for param in self.parameters():
+            param.requires_grad = True
+    
+    def get_embed_dim(self):
+        return self.embed_dim
+
+    def get_num_patches(self):
+        return self.patch_embed.num_patches
+
+    def get_features(self, features):
+        return features
+
+    def get_output_dim(self):
+        return self.embed_dim
+
+    def remove_classifier_head(self):
+        self.head = nn.Identity()
+    
+    def eval_forward(self, x):
+        return self.forward(x, is_training=False)
+
+    def get_eval_output_dim(self):
+        return self.embed_dim
+        
 
 def _build_mlp(nlayers, in_dim, bottleneck_dim, hidden_dim=None, use_bn=False, bias=True):
     if nlayers == 1:
@@ -1020,6 +1131,18 @@ class DINOHead(nn.Module):
         if not no_last_layer:
             x = self.last_layer(x)
         return x
+
+    def freeze(self):
+        for param in self.parameters():
+            param.requires_grad = False
+    
+    def unfreeze(self):
+        for param in self.parameters():
+            param.requires_grad = True
+
+    def cancel_gradients_last_layer(self, epoch, freeze_last_layer_epochs):
+        if epoch <= freeze_last_layer_epochs:
+            self.last_layer.weight_g.grad = None
     
 def dino_head(in_dim, out_dim, use_bn=False, nlayers=3, hidden_dim=2048, bottleneck_dim=256, mlp_bias=True):
     head = DINOHead(

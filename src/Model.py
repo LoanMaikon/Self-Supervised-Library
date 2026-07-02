@@ -245,6 +245,18 @@ class Model():
                     world_size=self.world_size,
                     continue_training=self.continue_training,
                 )
+            
+            case "dinov3":
+                from src.methods.dinov3.DINOv3 import DINOv3
+
+                self.method = DINOv3(
+                    opened_config=self.config,
+                    output_folder=self.output_folder,
+                    device=self.device,
+                    rank=self.rank,
+                    world_size=self.world_size,
+                    continue_training=self.continue_training,
+                )
 
             case _:
                 raise ValueError(f"Unsupported mode '{self.mode}'.")

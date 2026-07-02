@@ -101,6 +101,12 @@ def collate_data_and_cast(samples_list, mask_ratio_tuple, mask_probability, dtyp
         for s in samples_list
     ])
 
+    collated_gram_teacher_crops = torch.stack([
+        s[0][n_global_crops + n_local_crops + i]
+        for i in range(n_local_crops)
+        for s in samples_list
+    ])
+
     B = len(collated_global_crops)
     N = n_tokens
     n_samples_masked = int(B * mask_probability)
@@ -130,4 +136,5 @@ def collate_data_and_cast(samples_list, mask_ratio_tuple, mask_probability, dtyp
         "masks_weight": masks_weight,
         "upperbound": upperbound,
         "n_masked_patches": torch.full((1,), fill_value=mask_indices_list.shape[0], dtype=torch.long),
+        "collated_gram_teacher_crops": collated_gram_teacher_crops.to(dtype),
     }

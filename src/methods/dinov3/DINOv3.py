@@ -18,8 +18,9 @@ from .mask_collator import MaskingGenerator, collate_data_and_cast
 from .dino_clstoken_loss import DINOLoss
 from .gram_loss import GramLoss
 from .ibot_patch_loss import iBOTPatchLoss
+from src.koleo_loss import KoLeoLoss
 
-class DINOv2():
+class DINOv3():
     def __init__(self,
                  opened_config,
                  output_folder,
@@ -45,13 +46,14 @@ class DINOv2():
 
         self.dino_loss = DINOLoss(
             student_temp = self.optimization_temperature_student_cls[1],
-            out_dim = self.meta_dino_out_dim
+            out_dim = self.meta_projection_head_dino_output_dim
         )
-        self.gram = GramLoss()
+        self.gram_loss = GramLoss()
         self.ibot_patch_loss = iBOTPatchLoss(
             student_temp=self.optimization_temperature_student_patch[1],
-            patch_out_dim = self.meta_patch_out_dim
+            patch_out_dim = self.meta_projection_head_patch_output_dim
         )
+        self.koleo_loss = KoLeoLoss()
 
         self.scaler = torch.amp.GradScaler()
 
@@ -314,7 +316,7 @@ class DINOv2():
         images = images.flatten(0, 1)  # [n_crops * B, rgb, H, W]
 
         with torch.no_grad():
-            backbone_out = self.gram_teacher.backbone(images, is_training=True)
+            backbone_out = self.gram.backbone(images, is_training=True)
         teacher_patches = backbone_out["x_norm_patchtokens"]  # [n_crops * B, P_T, D]
 
         # Downsample Gram teacher features if needed
@@ -355,9 +357,9 @@ class DINOv2():
         global_crops = global_crops.flatten(0, 1)
 
         # Forward global and local crops through the student backbone jointly
-        global_out, local_out = self.student.backbone(
+        global_out, local_out = self.encoder(
             [global_crops, local_crops.flatten(0, 1)],
-            masks=[masks if not self.is_distillation_enabled else None, None],
+            masks=[masks],
             is_training=True,
         )
         g_cls, g_reg, g_patch = (
@@ -373,7 +375,7 @@ class DINOv2():
 
         # IBOT head only on masked patches
         masked_patches_pre_head = torch.index_select(g_patch.flatten(0, 1), dim=0, index=mask_indices_list)
-        global_masked_patch_after_head = self.student.ibot_head(masked_patches_pre_head)
+        global_masked_patch_after_head = self.projection_head_patch(masked_patches_pre_head)
 
         # DINO head on CLS tokens (all in one pass)
         buffer = [
@@ -382,7 +384,7 @@ class DINOv2():
         ]
         sizes = [x.shape[0] for x in buffer]
         buffer = torch.cat(buffer, dim=0)  # [n_global_crops * B + n_local_crops * B, D]
-        buffer = self.student.dino_head(buffer)  # [n_global_crops * B + n_local_crops * B, K]
+        buffer = self.projection_head_cls(buffer)  # [n_global_crops * B + n_local_crops * B, K]
         buffer = torch.split_with_sizes(buffer, sizes, dim=0)
 
         global_out = {
@@ -421,7 +423,7 @@ class DINOv2():
 
         # Loss scales like in DINOv2, these are multiplied with the loss weights from the config
         dino_global_terms = (
-            n_global_crops * (n_global_crops - 1) if self.dino_global_ignore_diagonal else n_global_crops**2
+            n_global_crops * (n_global_crops - 1)
         )
         dino_local_terms = n_global_crops * n_local_crops
         dino_global_scale = dino_global_terms / (dino_global_terms + dino_local_terms)
@@ -435,28 +437,24 @@ class DINOv2():
         )
         loss_dict["dino_local_crops_loss"] = dino_local_crops_loss
 
-        # Reweighting of DINO loss
-        if self.cfg.dino.reweight_dino_local_loss:
-            local_weight = self.dino_local_loss_schedule[iteration]
-        else:
-            local_weight = 1.0
+        local_weight = 1.0
 
         loss_dict["dino_local_loss_weight"] = local_weight
-        loss_accumulator += self.dino_loss_weight * dino_local_scale * local_weight * dino_local_crops_loss
+        loss_accumulator += self.optimization_dino_loss_weight * dino_local_scale * local_weight * dino_local_crops_loss
 
         # DINO global loss: compare post-head CLS tokens: student(global crops) vs. teacher(global crops)
         dino_global_crops_loss = self.dino_loss(
             student_logits=student_global["cls_after_head"],
             teacher_probs=teacher_global["cls_centered"],
-            ignore_diagonal=self.dino_global_ignore_diagonal,
+            ignore_diagonal=True,
         )
         loss_dict["dino_global_crops_loss"] = dino_global_crops_loss
-        loss_accumulator += self.dino_loss_weight * dino_global_scale * dino_global_crops_loss
+        loss_accumulator += self.optimization_dino_loss_weight * dino_global_scale * dino_global_crops_loss
 
         # Koleo: regularize pre-head CLS tokens of student(global crops)
         koleo_loss = sum(self.koleo_loss(x) for x in student_global["cls_pre_head"]) / n_global_crops
         loss_dict["koleo_loss"] = koleo_loss
-        loss_accumulator += self.dino_koleo_loss_weight * koleo_scale * koleo_loss
+        loss_accumulator += self.optimization_koleo_loss_weight * koleo_scale * koleo_loss
 
         # IBOT loss
         ibot_patch_loss = self.ibot_patch_loss.forward_masked(
@@ -467,40 +465,36 @@ class DINOv2():
             masks_weight=masks_weight,
         )
         loss_dict["ibot_loss"] = ibot_patch_loss
-        loss_accumulator += self.ibot_loss_weight * ibot_patch_loss
+        loss_accumulator += self.optimization_ibot_loss_weight * ibot_patch_loss
 
-        # Gram loss
-        if self.gram_use_loss:
-            gram_loss = self.gram_loss(
-                gram_global["student_patches"],
-                gram_global["teacher_patches"],
-                img_level=self.gram_img_level,
-            )
+        gram_loss = self.gram_loss(
+            gram_global["student_patches"],
+            gram_global["teacher_patches"],
+            img_level=False,
+        )
 
-            if self.gram_loss_schedule is not None:
-                gram_loss_weight = self.gram_loss_schedule[iteration]
-            else:
-                gram_loss_weight = self.gram_loss_weight
+        gram_loss_weight = self.optimization_gram_loss_weight
 
-            loss_dict["gram_loss_weight"] = gram_loss_weight
-            loss_accumulator += gram_loss * gram_loss_weight
-            loss_dict["gram_loss"] = gram_loss
+        loss_dict["gram_loss_weight"] = gram_loss_weight
+        loss_accumulator += gram_loss * gram_loss_weight
+        loss_dict["gram_loss"] = gram_loss
 
-            if self.gram_compute_stats:
-                with torch.no_grad():
-                    # Save stats over masked / unmasked tokens
-                    gram_loss_masked = self.gram_loss(
-                        gram_global["orig_student_patches"][masks].detach(),
-                        gram_global["orig_teacher_patches"][masks],
-                        img_level=False,
-                    )
-                    loss_dict["stats_only/masked_gram_loss"] = gram_loss_masked
-                    gram_loss_unmasked = self.gram_loss(
-                        gram_global["orig_student_patches"][~masks].detach(),
-                        gram_global["orig_teacher_patches"][~masks],
-                        img_level=False,
-                    )
-                    loss_dict["stats_only/unmasked_gram_loss"] = gram_loss_unmasked
+        gram_compute_stats = False
+        if gram_compute_stats:
+            with torch.no_grad():
+                # Save stats over masked / unmasked tokens
+                gram_loss_masked = self.gram_loss(
+                    gram_global["orig_student_patches"][masks].detach(),
+                    gram_global["orig_teacher_patches"][masks],
+                    img_level=False,
+                )
+                loss_dict["stats_only/masked_gram_loss"] = gram_loss_masked
+                gram_loss_unmasked = self.gram_loss(
+                    gram_global["orig_student_patches"][~masks].detach(),
+                    gram_global["orig_teacher_patches"][~masks],
+                    img_level=False,
+                )
+                loss_dict["stats_only/unmasked_gram_loss"] = gram_loss_unmasked
 
         return loss_accumulator, loss_dict
 
@@ -871,6 +865,7 @@ class DINOv2():
         self.optimization_dino_loss_weight = float(self.config['optimization']['dino_loss_weight'])
         self.optimization_ibot_loss_weight = float(self.config['optimization']['ibot_loss_weight'])
         self.optimization_koleo_loss_weight = float(self.config['optimization']['koleo_loss_weight'])
+        self.optimization_gram_loss_weight = float(self.config['optimization']['gram_loss_weight'])
         self.optimization_freeze_last_layer_epochs = int(self.config['optimization']['freeze_last_layer_epochs'])
         self.optimization_sinkhorn_iterations = int(self.config['optimization']['sinkhorn_iterations'])
         self.optimization_num_register_tokens = int(self.config['optimization']['num_register_tokens'])

@@ -28,6 +28,51 @@ class ListForwardMixin(object):
         x_flat = self.forward(x_flat)
         return uncat_with_shapes(x_flat, shapes, num_tokens)
 
+class Mlp(nn.Module, ListForwardMixin):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: Optional[int] = None,
+        out_features: Optional[int] = None,
+        act_layer: Callable[..., nn.Module] = nn.GELU,
+        drop: float = 0.0,
+        bias: bool = True,
+        device=None,
+    ) -> None:
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features, bias=bias, device=device)
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features, bias=bias, device=device)
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
+class LayerScale(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        init_values: Union[float, Tensor] = 1e-5,
+        inplace: bool = False,
+        device=None,
+    ) -> None:
+        super().__init__()
+        self.inplace = inplace
+        self.gamma = nn.Parameter(torch.empty(dim, device=device))
+        self.init_values = init_values
+
+    def reset_parameters(self):
+        nn.init.constant_(self.gamma, self.init_values)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return x.mul_(self.gamma) if self.inplace else x * self.gamma
+
 class SwiGLUFFN(nn.Module, ListForwardMixin):
     def __init__(
         self,
@@ -576,51 +621,6 @@ class ListForwardMixin(object):
         x_flat, shapes, num_tokens = cat_keep_shapes(x_list)
         x_flat = self.forward(x_flat)
         return uncat_with_shapes(x_flat, shapes, num_tokens)
-    
-class Mlp(nn.Module, ListForwardMixin):
-    def __init__(
-        self,
-        in_features: int,
-        hidden_features: Optional[int] = None,
-        out_features: Optional[int] = None,
-        act_layer: Callable[..., nn.Module] = nn.GELU,
-        drop: float = 0.0,
-        bias: bool = True,
-        device=None,
-    ) -> None:
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features, bias=bias, device=device)
-        self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features, bias=bias, device=device)
-        self.drop = nn.Dropout(drop)
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        x = self.fc2(x)
-        x = self.drop(x)
-        return x
-class LayerScale(nn.Module):
-    def __init__(
-        self,
-        dim: int,
-        init_values: Union[float, Tensor] = 1e-5,
-        inplace: bool = False,
-        device=None,
-    ) -> None:
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(torch.empty(dim, device=device))
-        self.init_values = init_values
-
-    def reset_parameters(self):
-        nn.init.constant_(self.gamma, self.init_values)
-
-    def forward(self, x: Tensor) -> Tensor:
-        return x.mul_(self.gamma) if self.inplace else x * self.gamma
 
 def named_apply(
     fn: Callable,
@@ -1043,6 +1043,8 @@ class DinoVisionTransformer(nn.Module):
         raise ValueError(
             f"Failed to load weights from {weight_path}. "
             f"Tried: {clean_state_dict.keys()}"
+            f"Missing keys: {list(set(self.state_dict().keys()) - set(clean_state_dict.keys()))}, "
+            f"Unexpected keys: {list(set(clean_state_dict.keys()) - set(self.state_dict().keys()))}"
         )
 
     def freeze(self):
@@ -1165,6 +1167,16 @@ def vit_small(patch_size=16, use_checkpoint=False, drop_path_rate=0.0):
         ffn_ratio=4,
         use_checkpoint=use_checkpoint,
         drop_path_rate=drop_path_rate,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        layerscale_init=1e-5,
+        norm_layer="layernormbf16",
+        ffn_layer="mlp",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
     )
     return model
 
@@ -1178,6 +1190,19 @@ def vit_base(patch_size=16, use_checkpoint=False, drop_path_rate=0.0):
         ffn_ratio=4,
         use_checkpoint=use_checkpoint,
         drop_path_rate=drop_path_rate,
+        img_size=224,
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        qkv_bias=True,
+        drop_path_rate=drop_path_rate,
+        layerscale_init=1.0e-5,
+        norm_layer="layernormbf16",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
     )
     return model
 
@@ -1191,6 +1216,19 @@ def vit_large(patch_size=16, use_checkpoint=False, drop_path_rate=0.0):
         ffn_ratio=4,
         use_checkpoint=use_checkpoint,
         drop_path_rate=drop_path_rate,
+        img_size=224,
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        qkv_bias=True,
+        drop_path_rate=drop_path_rate,
+        layerscale_init=1.0e-5,
+        norm_layer="layernormbf16",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
     )
     return model
 
@@ -1204,6 +1242,19 @@ def vit_so400m(patch_size=16, use_checkpoint=False, drop_path_rate=0.0):
         ffn_ratio=3.777777778,
         use_checkpoint=use_checkpoint,
         drop_path_rate=drop_path_rate,
+        img_size=224,
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        qkv_bias=True,
+        drop_path_rate=drop_path_rate,
+        layerscale_init=1.0e-5,
+        norm_layer="layernormbf16",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
     )
     return model
 
@@ -1217,6 +1268,19 @@ def vit_huge2(patch_size=16, use_checkpoint=False, drop_path_rate=0.0):
         ffn_ratio=4,
         use_checkpoint=use_checkpoint,
         drop_path_rate=drop_path_rate,
+        img_size=224,
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        qkv_bias=True,
+        drop_path_rate=drop_path_rate,
+        layerscale_init=1.0e-5,
+        norm_layer="layernormbf16",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
     )
     return model
 
@@ -1233,6 +1297,19 @@ def vit_giant2(patch_size=16, use_checkpoint=False, drop_path_rate=0.0):
         ffn_ratio=4,
         use_checkpoint=use_checkpoint,
         drop_path_rate=drop_path_rate,
+        img_size=224,
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        qkv_bias=True,
+        drop_path_rate=drop_path_rate,
+        layerscale_init=1.0e-5,
+        norm_layer="layernormbf16",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
     )
     return model
 
@@ -1246,5 +1323,18 @@ def vit_7b(patch_size=16, use_checkpoint=False, drop_path_rate=0.0):
         ffn_ratio=3,
         use_checkpoint=use_checkpoint,
         drop_path_rate=drop_path_rate,
+        img_size=224,
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        qkv_bias=True,
+        drop_path_rate=drop_path_rate,
+        layerscale_init=1.0e-5,
+        norm_layer="layernormbf16",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=4,
+        mask_k_bias=True,
     )
     return model

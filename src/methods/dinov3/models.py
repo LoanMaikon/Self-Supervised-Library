@@ -814,6 +814,8 @@ class DinoVisionTransformer(nn.Module):
         self.head = nn.Identity()
         self.mask_token = nn.Parameter(torch.empty(1, embed_dim, device=device))
 
+        self.init_weights()
+
     def init_weights(self):
         self.rope_embed._init_weights()
         nn.init.normal_(self.cls_token, std=0.02)
@@ -1075,7 +1077,6 @@ class DinoVisionTransformer(nn.Module):
 
     def get_eval_output_dim(self):
         return self.embed_dim
-        
 
 def _build_mlp(nlayers, in_dim, bottleneck_dim, hidden_dim=None, use_bn=False, bias=True):
     if nlayers == 1:
@@ -1116,6 +1117,8 @@ class DINOHead(nn.Module):
         )
         self.last_layer = nn.Linear(bottleneck_dim, out_dim, bias=False)
 
+        self.init_weights()
+
     def init_weights(self) -> None:
         self.apply(self._init_weights)
 
@@ -1141,10 +1144,6 @@ class DINOHead(nn.Module):
     def unfreeze(self):
         for param in self.parameters():
             param.requires_grad = True
-
-    def cancel_gradients_last_layer(self, epoch, freeze_last_layer_epochs):
-        if epoch <= freeze_last_layer_epochs:
-            self.last_layer.weight_g.grad = None
     
 def dino_head(in_dim, out_dim, use_bn=False, nlayers=3, hidden_dim=2048, bottleneck_dim=256, mlp_bias=True):
     head = DINOHead(

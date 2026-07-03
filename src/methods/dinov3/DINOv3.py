@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from functools import partial
 import torch.optim as optim
 import torch
-import copy
 import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
@@ -18,7 +17,7 @@ from .mask_collator import MaskingGenerator, collate_data_and_cast
 from .dino_clstoken_loss import DINOLoss
 from .gram_loss import GramLoss
 from .ibot_patch_loss import iBOTPatchLoss
-from src.koleo_loss import KoLeoLoss
+from .koleo_loss import KoLeoLoss
 
 class DINOv3():
     def __init__(self,
@@ -36,6 +35,13 @@ class DINOv3():
         self.rank = rank
         self.world_size = world_size
         self.continue_training = continue_training
+        try:
+            self.device_type = torch.device(device).type
+        except Exception:
+            self.device_type = "cuda" if torch.cuda.is_available() else "cpu"
+        self.amp_enabled = self.device_type == "cuda"
+        self.amp_dtype = torch.float16 if self.amp_enabled else torch.float32
+        self.global_iteration = 0
 
         self._load_config()
         self._load_models()
@@ -48,14 +54,21 @@ class DINOv3():
             student_temp = self.optimization_temperature_student_cls[1],
             out_dim = self.meta_projection_head_dino_output_dim
         )
-        self.gram_loss = GramLoss()
+        self.gram_loss = GramLoss(
+            apply_norm=self.gram_normalized,
+            img_level=self.gram_img_level,
+            remove_neg=self.gram_remove_neg,
+            remove_only_teacher_neg=self.gram_remove_only_teacher_neg,
+        )
         self.ibot_patch_loss = iBOTPatchLoss(
             student_temp=self.optimization_temperature_student_patch[1],
-            patch_out_dim = self.meta_projection_head_patch_output_dim
+            patch_out_dim = self.meta_projection_head_ibot_output_dim
         )
         self.koleo_loss = KoLeoLoss()
+        self.dino_loss.init_weights()
+        self.ibot_patch_loss.init_weights()
 
-        self.scaler = torch.amp.GradScaler()
+        self.scaler = torch.amp.GradScaler(device=self.device_type, enabled=self.amp_enabled)
 
         self.train_loss = []
         self.lr_values = []
@@ -104,44 +117,54 @@ class DINOv3():
                 n_masked_patches = mask_indices_list.shape[0] # int, total number of masked patches in the batch
                 upperbound = images_dict["upperbound"] # int, max number of masked patches in a single image
                 masks_weight = images_dict["masks_weight"].to(self.device, non_blocking=True) # [total_masked_patches], for each image contribute equally to the loss regardless of the number of masked patches
-                gram_teacher_crops = images_dict["collated_gram_teacher_crops"].to(self.device, non_blocking=True)
+                gram_teacher_crops = images_dict.get("collated_gram_teacher_crops")
+                if gram_teacher_crops is not None:
+                    gram_teacher_crops = gram_teacher_crops.to(self.device, non_blocking=True)
 
                 B = images_dict["collated_local_crops"].shape[0] // self.data_local_views_num
 
-                teacher_global = self.get_teacher_output(
-                    global_crops.unflatten(0, (self.data_global_views_num, B)),
-                    teacher_temp=self.teacher_cls_temperature_scheduler.get_value(),
-                    n_masked_patches_tensor=n_masked_patches_tensor,
-                    mask_indices_list=mask_indices_list,
-                    upperbound=upperbound,
-                )
+                with torch.amp.autocast(device_type=self.device_type, dtype=self.amp_dtype, enabled=self.amp_enabled):
+                    teacher_global = self.get_teacher_output(
+                        global_crops.unflatten(0, (self.data_global_views_num, B)),
+                        teacher_cls_temp=self.teacher_cls_temperature_scheduler.get_value(),
+                        teacher_patch_temp=self.teacher_patch_temperature_scheduler.get_value(),
+                        n_masked_patches_tensor=n_masked_patches_tensor,
+                        mask_indices_list=mask_indices_list,
+                        upperbound=upperbound,
+                    )
 
-                student_global, student_local = self.get_student_output(
-                    global_crops=global_crops.unflatten(0, (self.data_global_views_num, B)),
-                    local_crops=local_crops.unflatten(0, (self.data_local_views_num, B)),
-                    upperbound=upperbound,
-                    masks=masks,
-                    mask_indices_list=mask_indices_list,
-                )
+                    student_global, student_local = self.get_student_output(
+                        global_crops=global_crops.unflatten(0, (self.data_global_views_num, B)),
+                        local_crops=local_crops.unflatten(0, (self.data_local_views_num, B)),
+                        upperbound=upperbound,
+                        masks=masks,
+                        mask_indices_list=mask_indices_list,
+                    )
 
-                gram_global = self.get_gram_teacher_output(
-                    gram_teacher_crops.unflatten(0, (self.data_global_views_num, B)) if gram_teacher_crops is not None else None,
-                    masks=masks,
-                    teacher_global=teacher_global,
-                    student_global=student_global,
-                    student_global_crops_size=global_crops.shape[-1],
-                )
+                    if self.gram_use_loss:
+                        gram_global = self.get_gram_teacher_output(
+                            gram_teacher_crops.unflatten(0, (self.data_global_views_num, B)) if gram_teacher_crops is not None else None,
+                            masks=masks,
+                            teacher_global=teacher_global,
+                            student_global=student_global,
+                            student_global_crops_size=global_crops.shape[-1],
+                        )
+                    else:
+                        gram_global = {}
 
-                loss_accumulator, loss_dict = self.compute_losses(
-                    teacher_global=teacher_global,
-                    student_global=student_global,
-                    student_local=student_local,
-                    gram_global=gram_global,
-                    masks=masks,
-                    mask_indices_list=mask_indices_list,
-                    masks_weight=masks_weight,
-                    iteration=iteration,
-                )
+                    self.dino_loss.student_temp = self.student_cls_temperature_scheduler.get_value()
+                    self.ibot_patch_loss.student_temp = self.student_patch_temperature_scheduler.get_value()
+
+                    loss_accumulator, loss_dict = self.compute_losses(
+                        teacher_global=teacher_global,
+                        student_global=student_global,
+                        student_local=student_local,
+                        gram_global=gram_global,
+                        masks=masks,
+                        mask_indices_list=mask_indices_list,
+                        masks_weight=masks_weight,
+                        iteration=iteration,
+                    )
 
                 total_loss = loss_accumulator
                 batch_size = global_crops.shape[0] // self.data_global_views_num
@@ -151,21 +174,6 @@ class DINOv3():
                 num_samples += batch_size
 
                 self.scaler.scale(total_loss).backward()
-
-                if self.world_size > 1:
-                    self.projection_head_cls.module.cancel_gradients_last_layer(
-                        epoch, self.optimization_freeze_last_layer_epochs
-                    )
-                    self.projection_head_patch.module.cancel_gradients_last_layer(
-                        epoch, self.optimization_freeze_last_layer_epochs
-                    )
-                else:
-                    self.projection_head_cls.cancel_gradients_last_layer(
-                        epoch, self.optimization_freeze_last_layer_epochs
-                    )
-                    self.projection_head_patch.cancel_gradients_last_layer(
-                        epoch, self.optimization_freeze_last_layer_epochs
-                    )
 
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
@@ -225,7 +233,7 @@ class DINOv3():
         teacher_temp_scheduler_cls_state_dict = self.teacher_cls_temperature_scheduler.state_dict()
         student_temp_scheduler_patch_state_dict = self.student_patch_temperature_scheduler.state_dict()
         teacher_temp_scheduler_patch_state_dict = self.teacher_patch_temperature_scheduler.state_dict()
-        gram_state_dict = self.gram.state_dict()
+        gram_state_dict = self.gram.state_dict() if self.gram is not None else None
 
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder.pth"))
         torch.save(projection_head_cls_state_dict, os.path.join(self.output_folder, "models", f"projection_head_cls.pth"))
@@ -242,7 +250,8 @@ class DINOv3():
         torch.save(teacher_temp_scheduler_cls_state_dict, os.path.join(self.output_folder, "models", f"teacher_cls_temperature_scheduler.pth"))
         torch.save(student_temp_scheduler_patch_state_dict, os.path.join(self.output_folder, "models", f"student_patch_temperature_scheduler.pth"))
         torch.save(teacher_temp_scheduler_patch_state_dict, os.path.join(self.output_folder, "models", f"teacher_patch_temperature_scheduler.pth"))
-        torch.save(gram_state_dict, os.path.join(self.output_folder, "models", f"gram.pth"))
+        if gram_state_dict is not None:
+            torch.save(gram_state_dict, os.path.join(self.output_folder, "models", f"gram.pth"))
 
         if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
@@ -260,7 +269,8 @@ class DINOv3():
             torch.save(teacher_temp_scheduler_cls_state_dict, os.path.join(self.output_folder, "models", f"teacher_cls_temperature_scheduler_epoch_{epoch}.pth"))
             torch.save(student_temp_scheduler_patch_state_dict, os.path.join(self.output_folder, "models", f"student_patch_temperature_scheduler_epoch_{epoch}.pth"))
             torch.save(teacher_temp_scheduler_patch_state_dict, os.path.join(self.output_folder, "models", f"teacher_patch_temperature_scheduler_epoch_{epoch}.pth"))
-            torch.save(gram_state_dict, os.path.join(self.output_folder, "models", f"gram_epoch_{epoch}.pth"))
+            if gram_state_dict is not None:
+                torch.save(gram_state_dict, os.path.join(self.output_folder, "models", f"gram_epoch_{epoch}.pth"))
 
     @torch.no_grad()
     def get_teacher_output(
@@ -269,9 +279,15 @@ class DINOv3():
         *,
         upperbound,
         mask_indices_list,
-        teacher_temp,
-        n_masked_patches_tensor,
+        teacher_cls_temp=None,
+        teacher_patch_temp=None,
+        teacher_temp=None,
+        n_masked_patches_tensor=None,
     ):
+        if teacher_temp is not None and teacher_cls_temp is None:
+            teacher_cls_temp = teacher_temp
+        if teacher_patch_temp is None:
+            teacher_patch_temp = teacher_cls_temp
         n_crops, B, rgb, H, W = images.shape
         images = images.flatten(0, 1)
 
@@ -289,13 +305,14 @@ class DINOv3():
 
         # Center with sinkhorn-knopp
         cls_centered = self.dino_loss.sinkhorn_knopp_teacher(
-            cls_after_head, teacher_temp=teacher_temp
+            cls_after_head, teacher_temp=teacher_cls_temp, n_iterations=self.optimization_sinkhorn_iterations
         )  # [n_crops * B, K]
         cls_centered = cls_centered.unflatten(0, (n_crops, B))  # [n_crops, B, K]
         masked_patch_centered = self.ibot_patch_loss.sinkhorn_knopp_teacher(
             masked_patch_after_head,
-            teacher_temp=teacher_temp,
+            teacher_temp=teacher_patch_temp,
             n_masked_patches_tensor=n_masked_patches_tensor,
+            n_iterations=self.optimization_sinkhorn_iterations,
         )  # [n_masked_patches, K]
 
         return {
@@ -308,46 +325,56 @@ class DINOv3():
         }
 
     def get_gram_teacher_output(self, images, *, masks, teacher_global, student_global, student_global_crops_size):
-        # Get student patch features
-        student_patches = student_global["patch_pre_head"].flatten(0, 1)  # [n_crops * B, P, D]
-        teacher_patches = teacher_global["patch_pre_head"].flatten(0, 1)  # [n_crops * B, P, D]
+        """
+        1. EMA-teacher Gram target: reuse the already computed teacher global patches.
+        2. Separate Gram teacher: forward self.gram backbone on collated_gram_teacher_crops.
+        """
+        student_patches = student_global["patch_pre_head"].flatten(0, 1)  # [2B, P, D]
 
-        n_crops, B, rgb, H, W = images.shape
-        images = images.flatten(0, 1)  # [n_crops * B, rgb, H, W]
+        if self.gram_ema_teacher or self.gram is None:
+            teacher_patches = teacher_global["patch_pre_head"].flatten(0, 1)
+        else:
+            if images is None:
+                raise ValueError(
+                    "Gram loss is configured with a separate Gram teacher, but collated_gram_teacher_crops "
+                    "is missing. Either provide gram teacher crops or set gram.ema_teacher/use_ema_teacher=True."
+                )
+            n_crops, B, rgb, H, W = images.shape
+            images = images.flatten(0, 1)
+            with torch.no_grad():
+                backbone_out = self.gram(images, is_training=True)
+            teacher_patches = backbone_out["x_norm_patchtokens"]
 
-        with torch.no_grad():
-            backbone_out = self.gram.backbone(images, is_training=True)
-        teacher_patches = backbone_out["x_norm_patchtokens"]  # [n_crops * B, P_T, D]
+            if teacher_patches.shape[1] != student_patches.shape[1]:
+                N = H // self.meta_patch_size
+                assert teacher_patches.shape[1] == N**2
+                N_student = student_global_crops_size // self.meta_patch_size
+                assert student_patches.shape[1] == N_student**2
+                patches_hw = teacher_patches.transpose(-2, -1).unflatten(-1, (N, N))
+                patches_hw = torch.nn.functional.interpolate(
+                    patches_hw,
+                    size=(N_student, N_student),
+                    mode=self.gram_global_teacher_resize_method,
+                    align_corners=False if self.gram_global_teacher_resize_method in {"linear", "bilinear", "bicubic", "trilinear"} else None,
+                    antialias=self.gram_global_teacher_resize_antialias,
+                )
+                teacher_patches = patches_hw.flatten(-2, -1).transpose(-2, -1)
+                assert teacher_patches.shape == student_patches.shape
 
-        # Downsample Gram teacher features if needed
-        if teacher_patches.shape[1] != student_patches.shape[1]:
-            N = H // self.data_patch_size
-            assert teacher_patches.shape[1] == N**2
-            N_student = student_global_crops_size // self.data_patch_size
-            assert student_patches.shape[1] == N_student**2
-            patches_hw = teacher_patches.transpose(-2, -1).unflatten(-1, (N, N))  # [n_crops * B, D, N, N]
-            patches_hw = torch.nn.functional.interpolate(
-                patches_hw,
-                size=(N_student, N_student),
-                mode="bicubic",
-                align_corners=False,
-                antialias=False,
-            )
-            teacher_patches = patches_hw.flatten(-2, -1).transpose(
-                -2, -1
-            )  # [n_crops * B, N_student * N_student, D]
-            assert teacher_patches.shape == student_patches.shape
-
-        # Select the patches to be considered in the loss
         orig_student_patches = student_patches
         orig_teacher_patches = teacher_patches
+        if self.gram_tokens_used == "masked":
+            student_patches = student_patches[masks]
+            teacher_patches = teacher_patches[masks]
+        elif self.gram_tokens_used == "unmasked":
+            student_patches = student_patches[~masks]
+            teacher_patches = teacher_patches[~masks]
 
         return {
-            "student_patches": student_patches,  # [n_crops * B, P, D] or [n_selected_patches, D]
-            "teacher_patches": teacher_patches,  # [n_crops * B, P, D] or [n_selected_patches, D]
-            # Unmasked patches, for computing statistics
-            "orig_student_patches": orig_student_patches,  # [n_crops * B, P, D]
-            "orig_teacher_patches": orig_teacher_patches,  # [n_crops * B, P, D]
+            "student_patches": student_patches,
+            "teacher_patches": teacher_patches,
+            "orig_student_patches": orig_student_patches,
+            "orig_teacher_patches": orig_teacher_patches,
         }
 
     def get_student_output(self, *, global_crops, local_crops, upperbound, masks, mask_indices_list):
@@ -359,7 +386,7 @@ class DINOv3():
         # Forward global and local crops through the student backbone jointly
         global_out, local_out = self.encoder(
             [global_crops, local_crops.flatten(0, 1)],
-            masks=[masks],
+            masks=[masks, None],
             is_training=True,
         )
         g_cls, g_reg, g_patch = (
@@ -423,7 +450,7 @@ class DINOv3():
 
         # Loss scales like in DINOv2, these are multiplied with the loss weights from the config
         dino_global_terms = (
-            n_global_crops * (n_global_crops - 1)
+            n_global_crops * (n_global_crops - 1) if self.dino_global_ignore_diagonal else n_global_crops**2
         )
         dino_local_terms = n_global_crops * n_local_crops
         dino_global_scale = dino_global_terms / (dino_global_terms + dino_local_terms)
@@ -446,7 +473,7 @@ class DINOv3():
         dino_global_crops_loss = self.dino_loss(
             student_logits=student_global["cls_after_head"],
             teacher_probs=teacher_global["cls_centered"],
-            ignore_diagonal=True,
+            ignore_diagonal=self.dino_global_ignore_diagonal,
         )
         loss_dict["dino_global_crops_loss"] = dino_global_crops_loss
         loss_accumulator += self.optimization_dino_loss_weight * dino_global_scale * dino_global_crops_loss
@@ -467,54 +494,55 @@ class DINOv3():
         loss_dict["ibot_loss"] = ibot_patch_loss
         loss_accumulator += self.optimization_ibot_loss_weight * ibot_patch_loss
 
-        gram_loss = self.gram_loss(
-            gram_global["student_patches"],
-            gram_global["teacher_patches"],
-            img_level=False,
-        )
+        if self.gram_use_loss:
+            gram_loss = self.gram_loss(
+                gram_global["student_patches"],
+                gram_global["teacher_patches"],
+                img_level=self.gram_img_level,
+            )
 
-        gram_loss_weight = self.optimization_gram_loss_weight
+            gram_loss_weight = self.optimization_gram_loss_weight
+            loss_dict["gram_loss_weight"] = gram_loss_weight
+            loss_accumulator += gram_loss * gram_loss_weight
+            loss_dict["gram_loss"] = gram_loss
 
-        loss_dict["gram_loss_weight"] = gram_loss_weight
-        loss_accumulator += gram_loss * gram_loss_weight
-        loss_dict["gram_loss"] = gram_loss
-
-        gram_compute_stats = False
-        if gram_compute_stats:
-            with torch.no_grad():
-                # Save stats over masked / unmasked tokens
-                gram_loss_masked = self.gram_loss(
-                    gram_global["orig_student_patches"][masks].detach(),
-                    gram_global["orig_teacher_patches"][masks],
-                    img_level=False,
-                )
-                loss_dict["stats_only/masked_gram_loss"] = gram_loss_masked
-                gram_loss_unmasked = self.gram_loss(
-                    gram_global["orig_student_patches"][~masks].detach(),
-                    gram_global["orig_teacher_patches"][~masks],
-                    img_level=False,
-                )
-                loss_dict["stats_only/unmasked_gram_loss"] = gram_loss_unmasked
+            if self.gram_compute_stats:
+                with torch.no_grad():
+                    gram_loss_masked = self.gram_loss(
+                        gram_global["orig_student_patches"][masks].detach(),
+                        gram_global["orig_teacher_patches"][masks],
+                        img_level=False,
+                    )
+                    loss_dict["stats_only/masked_gram_loss"] = gram_loss_masked
+                    gram_loss_unmasked = self.gram_loss(
+                        gram_global["orig_student_patches"][~masks].detach(),
+                        gram_global["orig_teacher_patches"][~masks],
+                        img_level=False,
+                    )
+                    loss_dict["stats_only/unmasked_gram_loss"] = gram_loss_unmasked
 
         return loss_accumulator, loss_dict
 
-    def _update_ema(self):
-        encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
-        projection_head_cls_state_dict = self.projection_head_cls.module.state_dict() if self.world_size > 1 else self.projection_head_cls.state_dict()
-        projection_head_patch_state_dict = self.projection_head_patch.module.state_dict() if self.world_size > 1 else self.projection_head_patch.state_dict()
-        gram_state_dict = self.gram.state_dict()
+    @torch.no_grad()
+    def _update_ema(self, m=0):
+        ema = self.ema_scheduler.get_value()
 
-        with torch.no_grad():
-            ema = self.ema_scheduler.get_value()
-            
-            for param_name, param in self.target_encoder.named_parameters():
-                param.data.mul_(ema).add_(encoder_state_dict[param_name].data, alpha=1 - ema)
-            for param_name, param in self.target_projection_head_cls.named_parameters():
-                param.data.mul_(ema).add_(projection_head_cls_state_dict[param_name].data, alpha=1 - ema)
-            for param_name, param in self.target_projection_head_patch.named_parameters():
-                param.data.mul_(ema).add_(projection_head_patch_state_dict[param_name].data, alpha=1 - ema)
-            for param_name, param in self.gram.named_parameters():
-                param.data.mul_(ema).add_(gram_state_dict[param_name].data, alpha=1 - ema)
+        student_encoder = self.encoder.module if self.world_size > 1 else self.encoder
+        student_cls_head = self.projection_head_cls.module if self.world_size > 1 else self.projection_head_cls
+        student_patch_head = self.projection_head_patch.module if self.world_size > 1 else self.projection_head_patch
+
+        for p_t, p_s in zip(self.target_encoder.parameters(), student_encoder.parameters()):
+            p_t.data.mul_(ema).add_(p_s.data, alpha=1 - ema)
+
+        for p_t, p_s in zip(self.target_projection_head_cls.parameters(), student_cls_head.parameters()):
+            p_t.data.mul_(ema).add_(p_s.data, alpha=1 - ema)
+
+        for p_t, p_s in zip(self.target_projection_head_patch.parameters(), student_patch_head.parameters()):
+            p_t.data.mul_(ema).add_(p_s.data, alpha=1 - ema)
+
+        if self.gram is not None and self.gram_rep_update:
+            for p_g, p_t in zip(self.gram.parameters(), self.target_encoder.parameters()):
+                p_g.data.mul_(self.gram_update_momentum).add_(p_t.data, alpha=1 - self.gram_update_momentum)
 
     def _load_schedulers(self):
         self.lr_scheduler = WarmupCosineSchedule(
@@ -628,10 +656,18 @@ class DINOv3():
             mask_probability=self.meta_mask_probability,
             n_tokens=(self.data_global_views_crop_size // self.meta_patch_size) ** 2,
             mask_generator=masking_generator,
-            dtype=torch.float16,
+            dtype=self.batch_dtype,
             n_global_crops=self.data_global_views_num,
             n_local_crops=self.data_local_views_num,
+            n_gram_crops=(self.data_global_views_num if (self.gram_use_loss and not self.gram_ema_teacher) else 0),
+            random_circular_shift=self.mask_random_circular_shift,
         )
+
+        transforms = [self.global_transform_1, self.global_transform_2, self.local_transform]
+        times = [1, 1, self.data_local_views_num]
+        if self.gram_use_loss and not self.gram_ema_teacher:
+            transforms.extend([self.gram_transform])
+            times.extend([2])
 
         self.train_dataset = datasets(
             operation="train",
@@ -639,22 +675,24 @@ class DINOv3():
             dataset_name=self.data_train_dataset,
             separate_val_subset=self.data_separate_val_subset_use,
             val_size=self.data_separate_val_subset_size,
-            transforms=[self.global_transform_1, self.global_transform_2, self.local_transform],
-            times=[1, 1, self.data_local_views_num]
+            transforms=transforms,
+            times=times,
         )
 
         self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)
 
-        self.train_dataloader = torch.utils.data.DataLoader(
-            self.train_dataset,
+        loader_kwargs = dict(
+            dataset=self.train_dataset,
             batch_size=self.data_batch_size,
             sampler=self.train_sampler,
             num_workers=self.data_num_workers,
-            prefetch_factor=self.data_prefetch_factor,
             pin_memory=self.data_pin_memory,
             drop_last=self.data_drop_last,
             collate_fn=collate_fn,
         )
+        if self.data_num_workers > 0:
+            loader_kwargs["prefetch_factor"] = self.data_prefetch_factor
+        self.train_dataloader = torch.utils.data.DataLoader(**loader_kwargs)
 
     def _load_transform(self):
         # Pseudo code of Apendix A from SimCLR paper
@@ -693,27 +731,30 @@ class DINOv3():
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
 
+        self.gram_transform = v2.Compose([
+            v2.RandomResizedCrop(self.data_gram_teacher_crops_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
+            v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
+        ])
+
     def _load_models(self):
-        match self.meta_model_name:
-            case "vit_small":
-                self.encoder = vit_small(drop_path_rate=self.meta_drop_path_rate, patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = vit_small(patch_size=self.meta_patch_size)
-                self.gram = vit_small(patch_size=self.meta_patch_size)
+        builders = {
+            "vit_small": vit_small,
+            "vit_base": vit_base,
+            "vit_large": vit_large,
+            "vit_so400m": vit_so400m,
+            "vit_huge2": vit_huge2,
+            "vit_giant2": vit_giant2,
+            "vit_7b": vit_7b,
+        }
+        if self.meta_model_name not in builders:
+            raise ValueError(f"Unsupported DINOv3 model_name: {self.meta_model_name}. Available: {sorted(builders)}")
+        builder = builders[self.meta_model_name]
 
-            case "vit_base":
-                self.encoder = vit_base(drop_path_rate=self.meta_drop_path_rate, patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = vit_base(patch_size=self.meta_patch_size)
-                self.gram = vit_base(patch_size=self.meta_patch_size)
-
-            case "vit_large":
-                self.encoder = vit_large(drop_path_rate=self.meta_drop_path_rate, patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = vit_large(patch_size=self.meta_patch_size)
-                self.gram = vit_large(patch_size=self.meta_patch_size)
-
-            case "vit_giant2":
-                self.encoder = vit_giant2(drop_path_rate=self.meta_drop_path_rate, patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = vit_giant2(patch_size=self.meta_patch_size)
-                self.gram = vit_giant2(patch_size=self.meta_patch_size)
+        self.encoder = builder(drop_path_rate=self.meta_drop_path_rate, patch_size=self.meta_patch_size, use_checkpoint=self.meta_checkpoint)
+        self.target_encoder = builder(drop_path_rate=0.0, patch_size=self.meta_patch_size, use_checkpoint=False)
+        self.gram = None if self.gram_ema_teacher else builder(drop_path_rate=0.0, patch_size=self.meta_patch_size, use_checkpoint=False)
 
         self.projection_head_cls = dino_head(
             in_dim=self.encoder.get_embed_dim(),
@@ -723,7 +764,6 @@ class DINOv3():
             hidden_dim=self.meta_projection_head_dino_hidden_dim,
             bottleneck_dim=self.meta_projection_head_dino_bottleneck_dim,
         )
-
         self.projection_head_patch = dino_head(
             in_dim=self.encoder.get_embed_dim(),
             out_dim=self.meta_projection_head_ibot_output_dim,
@@ -732,7 +772,6 @@ class DINOv3():
             hidden_dim=self.meta_projection_head_ibot_hidden_dim,
             bottleneck_dim=self.meta_projection_head_ibot_bottleneck_dim,
         )
-        
         self.target_projection_head_cls = dino_head(
             in_dim=self.encoder.get_embed_dim(),
             out_dim=self.meta_projection_head_dino_output_dim,
@@ -741,7 +780,6 @@ class DINOv3():
             hidden_dim=self.meta_projection_head_dino_hidden_dim,
             bottleneck_dim=self.meta_projection_head_dino_bottleneck_dim,
         )
-
         self.target_projection_head_patch = dino_head(
             in_dim=self.encoder.get_embed_dim(),
             out_dim=self.meta_projection_head_ibot_output_dim,
@@ -753,37 +791,34 @@ class DINOv3():
 
         if self.meta_pretrained_weights is not None:
             if os.path.exists(self.meta_pretrained_weights):
-                self.encoder.load_weights(
-                    weight_path=self.meta_pretrained_weights,
-                    device=self.device
-                )
+                self.encoder.load_weights(weight_path=self.meta_pretrained_weights, device=self.device)
             else:
                 raise FileNotFoundError(f"Pretrained weights file not found at {self.meta_pretrained_weights}.")
-        
+
         self.target_encoder.load_state_dict(self.encoder.state_dict())
         self.target_projection_head_cls.load_state_dict(self.projection_head_cls.state_dict())
         self.target_projection_head_patch.load_state_dict(self.projection_head_patch.state_dict())
-        self.gram.load_state_dict(self.encoder.state_dict())
+        if self.gram is not None:
+            self.gram.load_state_dict(self.encoder.state_dict())
 
         if self.continue_training:
-            if os.path.exists(os.path.join(self.output_folder, "models")):
-                self.encoder.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"encoder.pth"), map_location=self.device))
-                self.target_encoder.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_encoder.pth"), map_location=self.device))
-                self.projection_head_cls.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"projection_head_cls.pth"), map_location=self.device))
-                self.projection_head_patch.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"projection_head_patch.pth"), map_location=self.device))
-                self.target_projection_head_cls.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_projection_head_cls.pth"), map_location=self.device))
-                self.target_projection_head_patch.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"target_projection_head_patch.pth"), map_location=self.device))
-                self.gram.load_state_dict(torch.load(os.path.join(self.output_folder, "models", f"gram.pth"), map_location=self.device))
+            model_dir = os.path.join(self.output_folder, "models")
+            if os.path.exists(model_dir):
+                self.encoder.load_state_dict(torch.load(os.path.join(model_dir, "encoder.pth"), map_location=self.device))
+                self.target_encoder.load_state_dict(torch.load(os.path.join(model_dir, "target_encoder.pth"), map_location=self.device))
+                self.projection_head_cls.load_state_dict(torch.load(os.path.join(model_dir, "projection_head_cls.pth"), map_location=self.device))
+                self.projection_head_patch.load_state_dict(torch.load(os.path.join(model_dir, "projection_head_patch.pth"), map_location=self.device))
+                self.target_projection_head_cls.load_state_dict(torch.load(os.path.join(model_dir, "target_projection_head_cls.pth"), map_location=self.device))
+                self.target_projection_head_patch.load_state_dict(torch.load(os.path.join(model_dir, "target_projection_head_patch.pth"), map_location=self.device))
+                gram_path = os.path.join(model_dir, "gram.pth")
+                if self.gram is not None and os.path.exists(gram_path):
+                    self.gram.load_state_dict(torch.load(gram_path, map_location=self.device))
             else:
-                raise FileNotFoundError(f"Model checkpoint files not found in {os.path.join(self.output_folder, 'models')}.")
+                raise FileNotFoundError(f"Model checkpoint files not found in {model_dir}.")
 
-        self.encoder.to(self.device)
-        self.target_encoder.to(self.device)
-        self.projection_head_cls.to(self.device)
-        self.projection_head_patch.to(self.device)
-        self.target_projection_head_cls.to(self.device)
-        self.target_projection_head_patch.to(self.device)
-        self.gram.to(self.device)
+        for module in [self.encoder, self.target_encoder, self.projection_head_cls, self.projection_head_patch, self.target_projection_head_cls, self.target_projection_head_patch, self.gram]:
+            if module is not None:
+                module.to(self.device)
 
         self.encoder.unfreeze()
         self.projection_head_cls.unfreeze()
@@ -791,24 +826,25 @@ class DINOv3():
         self.target_encoder.freeze()
         self.target_projection_head_cls.freeze()
         self.target_projection_head_patch.freeze()
-        self.gram.freeze()
+        if self.gram is not None:
+            self.gram.freeze()
 
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
             self.projection_head_cls = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head_cls)
             self.projection_head_patch = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head_patch)
-
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.projection_head_cls = DDP(self.projection_head_cls, device_ids=[self.rank], output_device=self.rank)
             self.projection_head_patch = DDP(self.projection_head_patch, device_ids=[self.rank], output_device=self.rank)
-        
+
         self.encoder.train()
-        self.target_encoder.train()
         self.projection_head_cls.train()
         self.projection_head_patch.train()
+        self.target_encoder.train()
         self.target_projection_head_cls.train()
         self.target_projection_head_patch.train()
-        self.gram.train()
+        if self.gram is not None:
+            self.gram.train()
 
     def _load_config(self):
         self.data_datasets_path = str(self.config['data']['datasets_path'])
@@ -866,10 +902,33 @@ class DINOv3():
         self.optimization_ibot_loss_weight = float(self.config['optimization']['ibot_loss_weight'])
         self.optimization_koleo_loss_weight = float(self.config['optimization']['koleo_loss_weight'])
         self.optimization_gram_loss_weight = float(self.config['optimization']['gram_loss_weight'])
-        self.optimization_freeze_last_layer_epochs = int(self.config['optimization']['freeze_last_layer_epochs'])
         self.optimization_sinkhorn_iterations = int(self.config['optimization']['sinkhorn_iterations'])
         self.optimization_num_register_tokens = int(self.config['optimization']['num_register_tokens'])
         self.optimization_decay_bias = bool(self.config['optimization']['decay_bias'])
         self.optimization_decay_norm = bool(self.config['optimization']['decay_norm'])
+
+        opt_cfg = self.config.get('optimization', {})
+        data_cfg = self.config.get('data', {})
+        gram_cfg = self.config.get('gram', {})
+        self.dino_global_ignore_diagonal = bool(opt_cfg.get('dino_global_ignore_diagonal', True))
+        self.mask_random_circular_shift = bool(opt_cfg.get('mask_random_circular_shift', False))
+        self.gram_use_loss = bool(gram_cfg.get('use_loss', self.optimization_gram_loss_weight > 0))
+        self.gram_ema_teacher = bool(gram_cfg.get('ema_teacher', gram_cfg.get('use_ema_teacher', True)))
+        self.gram_img_level = bool(gram_cfg.get('img_level', False))
+        self.gram_tokens_used = str(gram_cfg.get('tokens_used', 'all'))
+        if self.gram_tokens_used not in {'all', 'masked', 'unmasked'}:
+            raise ValueError("gram.tokens_used must be one of: all, masked, unmasked")
+        self.gram_normalized = bool(gram_cfg.get('normalized', True))
+        self.gram_remove_neg = bool(gram_cfg.get('remove_neg', True))
+        self.gram_remove_only_teacher_neg = bool(gram_cfg.get('remove_only_teacher_neg', False))
+        self.gram_compute_stats = bool(gram_cfg.get('compute_stats', False))
+        self.gram_rep_update = bool(gram_cfg.get('rep_update', False))
+        self.gram_update_momentum = float(gram_cfg.get('update_momentum', 0.0))
+        self.gram_global_teacher_resize_method = str(gram_cfg.get('global_teacher_resize_method', 'bicubic'))
+        self.gram_global_teacher_resize_antialias = bool(gram_cfg.get('global_teacher_resize_antialias', False))
+        gram_crop_cfg = data_cfg.get('gram_teacher_crops', {}) if isinstance(data_cfg.get('gram_teacher_crops', {}), dict) else {}
+        self.data_gram_teacher_crops_size = int(gram_crop_cfg.get('crop_size', self.data_global_views_crop_size))
+        dtype_name = str(opt_cfg.get('batch_dtype', opt_cfg.get('amp_dtype', 'fp16'))).lower()
+        self.batch_dtype = {'fp32': torch.float32, 'float32': torch.float32, 'fp16': torch.float16, 'float16': torch.float16, 'bf16': torch.bfloat16, 'bfloat16': torch.bfloat16}.get(dtype_name, torch.float16)
 
         self.data_datasets_path += "/" if not self.data_datasets_path.endswith("/") else ""

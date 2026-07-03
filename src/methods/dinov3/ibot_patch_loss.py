@@ -6,6 +6,7 @@
 # the terms of the DINOv3 License Agreement.
 
 import math
+import os
 
 import torch
 import torch.distributed as dist
@@ -64,8 +65,10 @@ class SinkhornKnoppTeacher(nn.Module):
         # world_size = dist.get_world_size() if dist.is_initialized() else 1
         Q = torch.exp(teacher_output / teacher_temp).t()  # Q is K-by-B for consistency with notations from our paper
         # B = Q.shape[1] * world_size # number of samples to assign
-        B = n_masked_patches_tensor
-        dist.all_reduce(B, group=get_process_subgroup())
+        B = n_masked_patches_tensor.clone().to(dtype=Q.dtype, device=Q.device)
+        if dist.is_available() and dist.is_initialized():
+            dist.all_reduce(B, group=get_process_subgroup())
+        B = B.clamp(min=1)
         K = Q.shape[0]  # how many prototypes
 
         # make the matrix sums to 1
@@ -101,7 +104,6 @@ class iBOTPatchLoss(nn.Module):
         self.len_teacher_patch_tokens = None
         self.async_batch_center = None
         self.sinkhorn_knopp_teacher = SinkhornKnoppTeacher()
-        self.sinkhorn_knopp_teacher.compile()
 
     def init_weights(self) -> None:
         self.center.zero_()

@@ -20,6 +20,7 @@ The following self-supervised methods are currently available:
 - iBOT
 - DINOv1
 - DINOv2
+- DINOv3
 - Barlow Twins
 - VICReg
 - SimSiam

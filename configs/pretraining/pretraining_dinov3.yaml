@@ -99,8 +99,21 @@ optimization:
   ibot_loss_weight: 1.0
   koleo_loss_weight: 0.1
   gram_loss_weight: 1.0
-  freeze_last_layer_epochs: 1
   sinkhorn_iterations: 3
   num_register_tokens: 0
   decay_bias: false
   decay_norm: false
+
+gram:
+  use_loss: true
+  ema_teacher: true
+  img_level: false
+  tokens_used: all
+  normalized: true
+  remove_neg: true
+  remove_only_teacher_neg: false
+  compute_stats: false
+  rep_update: false
+  update_momentum: 0.0
+  global_teacher_resize_method: bicubic
+  global_teacher_resize_antialias: false

@@ -4,6 +4,8 @@ import torch
 class LinearHead(torch.nn.Module):
     def __init__(self, in_features, out_features, batch_norm=False):
         super(LinearHead, self).__init__()
+        self.batch_norm = batch_norm
+
         if batch_norm:
             self.linear = torch.nn.Sequential(
                 torch.nn.BatchNorm1d(in_features, affine=False),
@@ -15,8 +17,12 @@ class LinearHead(torch.nn.Module):
         self._init()
     
     def _init(self):
-        self.linear.weight.data.normal_(mean=0.0, std=0.01)
-        self.linear.bias.data.zero_()
+        if not self.batch_norm:
+            self.linear.weight.data.normal_(mean=0.0, std=0.01)
+            self.linear.bias.data.zero_()
+        else:
+            self.linear[1].weight.data.normal_(mean=0.0, std=0.01)
+            self.linear[1].bias.data.zero_()
 
     def unfreeze(self):
         for param in self.linear.parameters():

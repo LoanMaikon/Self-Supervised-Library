@@ -100,6 +100,9 @@ This also allows you to experiment original models with custom datasets.
 | DINOv2 | ViT-S | 100 | 256 | 65.58 | lr: 1e-5 / 1e-4 / 1e-6; wd: 0.04 / 0.4; warmup: 10; no registers; 2 global views and 2 local views; EMA: 0.994 / 1.0 |
 | DINOv2 | ViT-S | 100 | 256 | 8.00 | lr: 1e-5 / 1e-4 / 1e-6; wd: 0.04 / 0.4; warmup: 10; no registers; 2 global views and 2 local views; EMA: 0.9995 / 1.0 |
 | DINOv2 | ViT-S | 100 | 256 | 65.66 | lr: 1e-5 / 1e-4 / 1e-6; wd: 0.04 / 0.4; warmup: 10; no registers; 2 global views and 2 local views; EMA: 0.995 / 1.0 |
+| SimSiam | ResNet-50 | 100 | 512 | 68.18 | lr: 0.1 / 0.1 / 0; wd: 0.0001 |
+| MoCov1 | ResNet-50 | 200 | 256 | 56.22 | lr: 0.03 / 0.03 / 0; wd: 0.0001 |
+| MoCov2 | ResNet-50 | 200 | 256 | 64.86 | lr: 0.03 / 0.03 / 0.0003; wd: 0.0001 |
 
 The full training runs and additional experiments with different hyperparameter configurations can be found [here](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library).
 

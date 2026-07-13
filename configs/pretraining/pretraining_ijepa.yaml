@@ -3,9 +3,9 @@ mode: ijepa
 data:
   datasets_path: /home/lmk22/datasets
   train_dataset: imagenet
-  batch_size: 256 # For each device, so the effective batch size is batch_size * num_devices
+  batch_size: 128 # 2 gpu
   crop_size: 224
-  num_workers: 32 # For each device, so the effective number of workers is num_workers * num_devices
+  num_workers: 32 # 2 gpu
   prefetch_factor: 1
   pin_memory: false
   drop_last: true
@@ -54,12 +54,12 @@ meta:
 optimization:
   ipe_scale: 1.0
   ema:
-  - 0.996
+  - 0.9995
   - 1.0
   lr:
-  - 0.0001
-  - 0.001
-  - 0.000001
+  - 0.0000125
+  - 0.0001250
+  - 0.0
   weight_decay:
   - 0.04
   - 0.4

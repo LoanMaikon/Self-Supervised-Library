@@ -1,6 +1,7 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
+import torch.distributed as dist
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
@@ -288,7 +289,7 @@ class IJEPA():
 
     def _load_transform(self):
         self.transform = v2.Compose([
-            v2.RandomResizedCrop(size=self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC),
+            v2.RandomResizedCrop(size=self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BILINEAR),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)
         ])
@@ -350,6 +351,12 @@ class IJEPA():
 
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.predictor = DDP(self.predictor, device_ids=[self.rank], output_device=self.rank)
+
+            with torch.no_grad():
+                for param in self.target_encoder.parameters():
+                    dist.broadcast(param, src=0)
+                for buffer in self.target_encoder.buffers():
+                    dist.broadcast(buffer, src=0)
 
         self.encoder.train()
         self.predictor.train()

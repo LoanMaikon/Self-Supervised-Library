@@ -1,8 +1,8 @@
 # Incorporated third-party source; local adaptations for Self-Supervised Library.
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Source scope, attribution and modifications: LICENSES/README.md.
 # Incorporated-source terms: DINOv3 License Agreement, last updated August 19, 2025.
-# Full upstream license copy: LICENSES/DINOv3.txt
+# Full upstream license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: dinov3]
 
 # https://github.com/facebookresearch/dinov3/blob/main/dinov3/loss/dino_clstoken_loss.py
 

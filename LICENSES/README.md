@@ -1,11 +1,110 @@
+# Licensing and third-party notices
+
+This folder documents the existing licenses of incorporated source, its origins, and the scope of each license. No new license has been selected for the project's own contributions.
+
+| File | Contents |
+| :--- | :--- |
+| [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt) | All 18 original license texts, separated by project, with credits and conditions preserved. |
+| [sources.json](sources.json) | Source snapshots, file/function mappings, section locations, and verification checksums. |
+| This guide | The existing license scope and complete third-party attribution audit below. |
+
+The incorporated source includes Apache-2.0, MIT, CC BY-NC 4.0, BSD-style terms, and the DINOv3 License Agreement. Each keeps its own scope and conditions.
+
+**The current workflows include noncommercial components:** all 15 methods and evaluation use shared schedulers derived from I-JEPA. The BYOL converter-derived backbone also has an unresolved permission status. The full scope and outstanding questions are preserved below; this guide does not grant new rights or resolve missing permission.
+
+Paths to project source and `LICENSES/` in the preserved audit are relative to the repository root. The two document links above are relative to this folder.
+
+## Existing license scope
+
+<details>
+<summary>Full scope index and outstanding questions</summary>
+
+```text
+Self-Supervised Library - existing license scope
+Audit date: 2026-10-12
+
+This repository contains source from several projects under different
+licenses. This file is an index of existing terms, not a new license grant
+for the repository as a whole. No new license has been selected for
+project-authored code, documentation, configurations, or modifications.
+Those contributions must not be assumed to be licensed under the terms
+of an upstream project solely because they implement the same method.
+
+Existing third-party notices and license terms continue to apply to their
+respective source and adapted portions. The complete upstream license
+texts are preserved, without modification, in separate project sections of
+LICENSES/THIRD_PARTY_LICENSES.txt. File/function scope, attribution,
+changes, sources, and unresolved provenance are
+documented in LICENSES/README.md. Verification snapshots and
+license checksums are recorded in LICENSES/sources.json.
+
+Principal upstream terms found in incorporated source:
+
+  Apache-2.0:
+    SimCLR converter, DINOv1, DINOv2, iBOT, Lightning Bolts, and timm.
+    MSN's src/deit.py backbone has an explicit Apache-2.0 file notice;
+    MSN's root license and its losses/utilities are CC-BY-NC-4.0.
+
+  MIT:
+    Barlow Twins, VICReg, and the verified relicensed MoCo implementation
+    used as a reference for MoCov1/MoCov2.
+
+  CC-BY-NC-4.0:
+    SwAV, MAE, I-JEPA, SimSiam, MSN losses/utilities, and shared code
+    derived from MAE, I-JEPA, and MoCo v3.
+
+  DINOv3 License Agreement:
+    Incorporated DINOv3 model, loss, and masking/collation source and
+    adaptations. See section [dinov3] in LICENSES/THIRD_PARTY_LICENSES.txt
+    for the complete agreement.
+
+  BSD-style / BSD-3-Clause:
+    Incorporated PyTorch initialization code and inherited torchvision
+    ResNet portions. Imported dependencies also retain their own terms.
+
+Important scope and outstanding issues:
+
+  - All 15 method controllers and the evaluation pipeline use the shared
+    I-JEPA-derived schedulers. CC-BY-NC terms apply to the covered source
+    and adaptations; the complete current workflow cannot be represented
+    as having unrestricted commercial-use permission. An import does not
+    automatically relicense the importing file.
+
+  - src/methods/byol/resnet.py identifies ajtejankar/byol-convert as its
+    source. No explicit license was found in that upstream snapshot.
+    This index does not authorize use or redistribution of portions for
+    which permission has not been established. The license of the
+    original BYOL research implementation does not resolve this gap.
+
+  - Some files contain both project-specific and third-party portions.
+    See the function-level scope in LICENSES/README.md; no
+    blanket license is assigned to those mixed files by this index.
+
+  - This source-code audit does not grant rights to ImageNet, separately
+    downloaded model weights, or other external assets. Their respective
+    terms must be checked separately.
+
+The upstream license texts govern their covered materials. This index
+does not replace their conditions, cure missing permission, or certify
+that the entire repository is fully licensed for a particular use.
+```
+
+</details>
+
+## Third-party attribution audit
+
+<details>
+<summary>All 15 methods, shared utilities, copyrights, sources, and adaptations</summary>
+
+```text
 Self-Supervised Library - third-party notices and source audit
 ============================================================
 Audit date: 2026-10-12
 
 This document records existing source provenance and license scope. It does
 not adopt a new license for project-authored contributions or certify that
-all permission questions have been resolved. Read LICENSE at the repository
-root for the scope index. Local paths below are relative to the repository root.
+all permission questions have been resolved. The scope index is preserved
+in this licensing guide. Local paths below are relative to the repository root.
 
 Verification commits below pin the evidence examined; original copied
 revisions were generally not recorded in local source. A method name, paper
@@ -45,126 +144,126 @@ UPSTREAM LICENSE TEXTS AND ATTRIBUTION
 Verification commit: 7c446df5b9f45747937fb0d72314eb9f7b66930a
 Terms: Apache-2.0
 Notice: Copyright (c) Facebook, Inc. and its affiliates.
-Unmodified license copy: LICENSES/DINO-Apache-2.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: dino]
 Official license: https://github.com/facebookresearch/dino/blob/7c446df5b9f45747937fb0d72314eb9f7b66930a/LICENSE
 
 [dinov2] https://github.com/facebookresearch/dinov2
 Verification commit: 7764ea0f912e53c92e82eb78a2a1631e92725fc8
 Terms: Apache-2.0
 Notice: Copyright (c) Meta Platforms, Inc. and affiliates.
-Unmodified license copy: LICENSES/DINOv2-Apache-2.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: dinov2]
 Official license: https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/LICENSE
 
 [ibot] https://github.com/bytedance/ibot
 Verification commit: da316d82636a7a7356835ef224b13d5f3ace0489
 Terms: Apache-2.0
 Notice: Copyright (c) ByteDance, Inc. and its affiliates. All rights reserved.
-Unmodified license copy: LICENSES/iBOT-Apache-2.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: ibot]
 Official license: https://github.com/bytedance/ibot/blob/da316d82636a7a7356835ef224b13d5f3ace0489/LICENSE
 
 [mae] https://github.com/facebookresearch/mae
 Verification commit: efb2a8062c206524e35e47d04501ed4f544c0ae8
 Terms: CC-BY-NC-4.0
 Notice: Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
-Unmodified license copy: LICENSES/MAE-CC-BY-NC-4.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: mae]
 Official license: https://github.com/facebookresearch/mae/blob/efb2a8062c206524e35e47d04501ed4f544c0ae8/LICENSE
 
 [ijepa] https://github.com/facebookresearch/ijepa
 Verification commit: 52c1ae95d05f743e000e8f10a1f3a79b10cff048
 Terms: CC-BY-NC-4.0
 Notice: Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
-Unmodified license copy: LICENSES/I-JEPA-CC-BY-NC-4.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: ijepa]
 Official license: https://github.com/facebookresearch/ijepa/blob/52c1ae95d05f743e000e8f10a1f3a79b10cff048/LICENSE
 
 [msn] https://github.com/facebookresearch/msn
 Verification commit: 4388dc1eadbe3042b85d3296d41b9b207656e043
 Terms: CC-BY-NC-4.0 (root; backbone file has Apache-2.0 notice)
 Notice: Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
-Unmodified license copy: LICENSES/MSN-CC-BY-NC-4.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: msn]
 Official license: https://github.com/facebookresearch/msn/blob/4388dc1eadbe3042b85d3296d41b9b207656e043/LICENSE
 
 [swav] https://github.com/facebookresearch/swav
 Verification commit: 06b1b7cbaf6ba2a792300d79c7299db98b93b7f9
 Terms: CC-BY-NC-4.0
 Notice: Copyright (c) Facebook, Inc. and its affiliates.
-Unmodified license copy: LICENSES/SwAV-CC-BY-NC-4.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: swav]
 Official license: https://github.com/facebookresearch/swav/blob/06b1b7cbaf6ba2a792300d79c7299db98b93b7f9/LICENSE
 
 [simsiam] https://github.com/facebookresearch/simsiam
 Verification commit: a7bc1772896d0dad0806c51f0bb6f3b16d290468
 Terms: CC-BY-NC-4.0
 Notice: Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
-Unmodified license copy: LICENSES/SimSiam-CC-BY-NC-4.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: simsiam]
 Official license: https://github.com/facebookresearch/simsiam/blob/a7bc1772896d0dad0806c51f0bb6f3b16d290468/LICENSE
 
 [barlowtwins] https://github.com/facebookresearch/barlowtwins
 Verification commit: 8e8d284ca0bc02f88b92328e53f9b901e86b4a3c
 Terms: MIT
 Notice: Copyright (c) Facebook, Inc. and its affiliates.
-Unmodified license copy: LICENSES/BarlowTwins-MIT.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: barlowtwins]
 Official license: https://github.com/facebookresearch/barlowtwins/blob/8e8d284ca0bc02f88b92328e53f9b901e86b4a3c/LICENSE
 
 [vicreg] https://github.com/facebookresearch/vicreg
 Verification commit: 4e12602fd495af83efd1631fbe82523e6db092e0
 Terms: MIT
 Notice: Copyright (c) Facebook, Inc. and its affiliates. / Copyright (c) Meta Platforms, Inc. and affiliates. in main_vicreg.py
-Unmodified license copy: LICENSES/VICReg-MIT.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: vicreg]
 Official license: https://github.com/facebookresearch/vicreg/blob/4e12602fd495af83efd1631fbe82523e6db092e0/LICENSE
 
 [moco] https://github.com/facebookresearch/moco
 Verification commit: 7397dfe146c7ca6bbb58e9c382498069178ba764
 Terms: MIT
 Notice: Copyright (c) Meta Platforms, Inc. and affiliates. Existing local Facebook notices are retained.
-Unmodified license copy: LICENSES/MoCo-MIT.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: moco]
 Official license: https://github.com/facebookresearch/moco/blob/7397dfe146c7ca6bbb58e9c382498069178ba764/LICENSE
 
 [torchvision] https://github.com/pytorch/vision
 Verification commit: b68adcf9a9280aef02fc08daed170d74d0892361
 Terms: BSD-3-Clause
 Notice: Copyright (c) Soumith Chintala 2016,
-Unmodified license copy: LICENSES/TorchVision-BSD-3-Clause.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: torchvision]
 Official license: https://github.com/pytorch/vision/blob/b68adcf9a9280aef02fc08daed170d74d0892361/LICENSE
 
 [dinov3] https://github.com/facebookresearch/dinov3
 Verification commit: 6876159a11b4df116f30f667f8c9888617df0751
 Terms: DINOv3 License Agreement, last updated August 19, 2025
 Notice: Copyright (c) Meta Platforms, Inc. and affiliates.
-Unmodified license copy: LICENSES/DINOv3.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: dinov3]
 Official license: https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/LICENSE.md
 
 [simclr_converter] https://github.com/tonylins/simclr-converter
 Verification commit: 139d3cb0bd0c64b5ad32aab810e0bd0a0dddaae0
 Terms: Apache-2.0
 Notice: Copyright [2020] [Ji Lin] (upstream LICENSE appendix)
-Unmodified license copy: LICENSES/SimCLR-Converter-Apache-2.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: simclr_converter]
 Official license: https://github.com/tonylins/simclr-converter/blob/139d3cb0bd0c64b5ad32aab810e0bd0a0dddaae0/LICENSE
 
 [pytorch] https://github.com/pytorch/pytorch
 Verification commit: 0398ae1ef13f587e49d96aece24d334d88f562a7
 Terms: BSD-style terms; full upstream copyright list retained in license text
 Notice: Multiple copyright holders listed in the full PyTorch license.
-Unmodified license copy: LICENSES/PyTorch-BSD.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: pytorch]
 Official license: https://github.com/pytorch/pytorch/blob/0398ae1ef13f587e49d96aece24d334d88f562a7/LICENSE
 
 [timm] https://github.com/huggingface/pytorch-image-models
 Verification commit: cfc742eb6a4bc4bb35ef20c9b2d5a2a31f599bba
 Terms: Apache-2.0
 Notice: Copyright 2019 Ross Wightman (upstream LICENSE appendix)
-Unmodified license copy: LICENSES/timm-Apache-2.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: timm]
 Official license: https://github.com/huggingface/pytorch-image-models/blob/cfc742eb6a4bc4bb35ef20c9b2d5a2a31f599bba/LICENSE
 
 [bolts] https://github.com/Lightning-Universe/lightning-bolts
 Verification commit: 34958a8892d42714edf02ba896fd5861ebb3cb7e
 Terms: Apache-2.0
 Notice: Copyright 2018-2021 William Falcon (upstream LICENSE appendix)
-Unmodified license copy: LICENSES/Lightning-Bolts-Apache-2.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: bolts]
 Official license: https://github.com/Lightning-Universe/lightning-bolts/blob/34958a8892d42714edf02ba896fd5861ebb3cb7e/LICENSE
 
 [moco_v3] https://github.com/facebookresearch/moco-v3
 Verification commit: c349e6e24f40d3fedb22d973f92defa4cedf37a7
 Terms: CC-BY-NC-4.0
 Notice: Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-Unmodified license copy: LICENSES/MoCo-v3-CC-BY-NC-4.0.txt
+Unmodified license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: moco_v3]
 Official license: https://github.com/facebookresearch/moco-v3/blob/c349e6e24f40d3fedb22d973f92defa4cedf37a7/LICENSE
 
 [byol_converter] https://github.com/ajtejankar/byol-convert
@@ -508,7 +607,9 @@ HISTORY, EXCLUSIONS AND OUTSTANDING QUESTIONS
 
 PRESERVATION AND DISTRIBUTION
 -----------------------------
-Copies in LICENSES/ retain full upstream terms and disclaimers unchanged.
+Sections in LICENSES/THIRD_PARTY_LICENSES.txt retain full upstream terms
+and disclaimers unchanged. The original texts are preserved byte for byte;
+sources.json identifies each section and its text checksum and byte range.
 Relevant upstream copyright/source notices are retained or restored in
 covered files, and adaptations are identified. Apache, MIT and BSD
 redistribution conditions must be followed for covered portions. CC BY-NC
@@ -524,3 +625,6 @@ ImageNet have their own terms; no rights to those assets are granted here.
 Author-contributed code/configurations/documentation still require a separate
 licensing decision. Including these notices does not cure the BYOL converter
 permission gap or constitute a blanket repository license.
+```
+
+</details>

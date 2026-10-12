@@ -283,7 +283,7 @@ Full training runs and additional hyperparameter experiments are available in th
 
 ## Licensing
 
-The repository incorporates source under **Apache-2.0, MIT, CC BY-NC 4.0, BSD-style terms, and the DINOv3 License Agreement**. [LICENSE](LICENSE) records their scope; [third-party notices](LICENSES/THIRD_PARTY_NOTICES) document the files, functions, sources, and attribution. Full upstream texts and verification metadata are in [LICENSES/](LICENSES).
+All licensing documentation is in [LICENSES/](LICENSES). The [licensing guide](LICENSES/README.md) records the scope of **Apache-2.0, MIT, CC BY-NC 4.0, BSD-style terms, and the DINOv3 License Agreement**, together with the complete third-party attribution audit. All 18 original license texts are collected in [THIRD_PARTY_LICENSES.txt](LICENSES/THIRD_PARTY_LICENSES.txt), with separate project sections preserving their credits and conditions. [Source metadata](LICENSES/sources.json) records each section's origin and checksum.
 
 **The current workflows include noncommercial components:** all 15 methods and evaluation use shared schedulers derived from I-JEPA. Other shared utilities also contain CC BY-NC code. The license of a method's backbone alone does not describe the permissions for the complete workflow.
 
@@ -293,8 +293,10 @@ The backbone in `src/methods/byol/resnet.py` comes from a converter for which no
 
 ```text
 Self-Supervised-Library/
-├── LICENSE                 # License scope index
-├── LICENSES/               # Upstream license texts, notices, and source metadata
+├── LICENSES/
+│   ├── README.md               # License scope and complete third-party attribution
+│   ├── THIRD_PARTY_LICENSES.txt # All original license texts, separated by project
+│   └── sources.json           # Verification snapshots and section checksums
 ├── main.py                 # Training and evaluation entry point
 ├── configs/
 │   ├── pretraining/         # One pretraining configuration per method

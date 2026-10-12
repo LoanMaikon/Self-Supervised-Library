@@ -1,8 +1,8 @@
 # Incorporated third-party source; local adaptations for Self-Supervised Library.
 # Copyright (c) Facebook, Inc. and its affiliates.
-# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Source scope, attribution and modifications: LICENSES/README.md.
 # Incorporated-source terms: CC-BY-NC-4.0.
-# Full upstream license copy: LICENSES/SwAV-CC-BY-NC-4.0.txt
+# Full upstream license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: swav]
 
 # Code from https://github.com/facebookresearch/swav/blob/main/src/resnet50.py
 

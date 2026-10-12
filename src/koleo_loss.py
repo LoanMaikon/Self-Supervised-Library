@@ -1,8 +1,8 @@
 # Incorporated third-party source; local adaptations for Self-Supervised Library.
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Source scope, attribution and modifications: LICENSES/README.md.
 # Incorporated-source terms: Apache-2.0.
-# Full upstream license copy: LICENSES/DINOv2-Apache-2.0.txt
+# Full upstream license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: dinov2]
 
 # Code from https://github.com/facebookresearch/dinov2/blob/main/dinov2/loss/koleo_loss.py
 

@@ -1,8 +1,8 @@
 # Incorporated third-party source; local adaptations for Self-Supervised Library.
 # Copyright (c) ByteDance, Inc. and its affiliates. All rights reserved.
-# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Source scope, attribution and modifications: LICENSES/README.md.
 # Incorporated-source terms: Apache-2.0.
-# Full upstream license copy: LICENSES/iBOT-Apache-2.0.txt
+# Full upstream license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: ibot]
 
 # Code from https://github.com/bytedance/ibot/blob/main/models/vision_transformer.py
 
@@ -10,7 +10,7 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+# LICENSE file in the root directory of the upstream source tree.
 
 """
 Mostly copy-paste from DINO and timm library:

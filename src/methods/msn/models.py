@@ -1,8 +1,8 @@
 # Incorporated third-party source; local adaptations for Self-Supervised Library.
 # Copyright (c) Facebook, Inc. and its affiliates.
-# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
-# Incorporated-source terms: Apache-2.0 (explicit upstream file header); see root-license discrepancy in LICENSES/THIRD_PARTY_NOTICES.
-# Full terms: LICENSES/DINO-Apache-2.0.txt and LICENSES/MSN-CC-BY-NC-4.0.txt
+# Source scope, attribution and modifications: LICENSES/README.md.
+# Incorporated-source terms: Apache-2.0 (explicit upstream file header); see root-license discrepancy in LICENSES/README.md.
+# Full terms: LICENSES/THIRD_PARTY_LICENSES.txt, sections [dino] and [msn].
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 #

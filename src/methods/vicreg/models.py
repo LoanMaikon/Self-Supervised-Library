@@ -1,8 +1,8 @@
 # Incorporated third-party source; local adaptations for Self-Supervised Library.
 # Copyright (c) Facebook, Inc. and its affiliates. / Copyright (c) Meta Platforms, Inc. and affiliates. in main_vicreg.py
-# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Source scope, attribution and modifications: LICENSES/README.md.
 # Incorporated-source terms: MIT.
-# Full upstream license copy: LICENSES/VICReg-MIT.txt
+# Full upstream license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: vicreg]
 
 # Code from https://github.com/facebookresearch/vicreg/blob/main/resnet.py
 
@@ -10,7 +10,7 @@
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+# LICENSE file in the root directory of the upstream source tree.
 #
 
 import torch

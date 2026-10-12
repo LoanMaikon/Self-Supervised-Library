@@ -1,8 +1,8 @@
 # Incorporated third-party source; local adaptations for Self-Supervised Library.
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Source scope, attribution and modifications: LICENSES/README.md.
 # Incorporated-source terms: MIT.
-# Full upstream license copy: LICENSES/VICReg-MIT.txt
+# Full upstream license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: vicreg]
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler

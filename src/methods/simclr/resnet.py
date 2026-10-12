@@ -1,8 +1,8 @@
 # Incorporated third-party source; local adaptations for Self-Supervised Library.
 # Copyright [2020] [Ji Lin] (upstream notice; see license copy).
-# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Source scope, attribution and modifications: LICENSES/README.md.
 # Incorporated-source terms: Apache-2.0.
-# Full upstream license copy: LICENSES/SimCLR-Converter-Apache-2.0.txt
+# Full upstream license copy: LICENSES/THIRD_PARTY_LICENSES.txt [section: simclr_converter]
 
 '''
 This code is from https://github.com/tonylins/simclr-converter with some modifications

@@ -10,10 +10,14 @@
       "verification_commit": "7c446df5b9f45747937fb0d72314eb9f7b66930a",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/dino/blob/7c446df5b9f45747937fb0d72314eb9f7b66930a/LICENSE",
-      "license_file": "LICENSES/DINO-Apache-2.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "Apache-2.0",
       "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates.",
-      "sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a"
+      "license_text_sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a",
+      "license_section_start_line": 42,
+      "license_text_byte_offset": 3024,
+      "license_text_byte_length": 11324,
+      "license_section": "dino"
     },
     {
       "key": "dinov2",
@@ -21,10 +25,14 @@
       "verification_commit": "7764ea0f912e53c92e82eb78a2a1631e92725fc8",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/LICENSE",
-      "license_file": "LICENSES/DINOv2-Apache-2.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "Apache-2.0",
       "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates.",
-      "sha256": "600cc67cc4cb2f5ea317dcfc687ad1c74dc4bec8782bbe9db0afd83513b935b7"
+      "license_text_sha256": "600cc67cc4cb2f5ea317dcfc687ad1c74dc4bec8782bbe9db0afd83513b935b7",
+      "license_section_start_line": 260,
+      "license_text_byte_offset": 15085,
+      "license_text_byte_length": 11359,
+      "license_section": "dinov2"
     },
     {
       "key": "ibot",
@@ -32,10 +40,14 @@
       "verification_commit": "da316d82636a7a7356835ef224b13d5f3ace0489",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/bytedance/ibot/blob/da316d82636a7a7356835ef224b13d5f3ace0489/LICENSE",
-      "license_file": "LICENSES/iBOT-Apache-2.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "Apache-2.0",
       "copyright_notice": "Copyright (c) ByteDance, Inc. and its affiliates. All rights reserved.",
-      "sha256": "283ea6cc2997a1a70da0049e09adf9317bb60ca1b51279b65196b83a69e1996b"
+      "license_text_sha256": "283ea6cc2997a1a70da0049e09adf9317bb60ca1b51279b65196b83a69e1996b",
+      "license_section_start_line": 480,
+      "license_text_byte_offset": 27183,
+      "license_text_byte_length": 11323,
+      "license_section": "ibot"
     },
     {
       "key": "mae",
@@ -43,10 +55,14 @@
       "verification_commit": "efb2a8062c206524e35e47d04501ed4f544c0ae8",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/mae/blob/efb2a8062c206524e35e47d04501ed4f544c0ae8/LICENSE",
-      "license_file": "LICENSES/MAE-CC-BY-NC-4.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "CC-BY-NC-4.0",
       "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.",
-      "sha256": "ffe3b1e0b58c1f1250ce48f84d8c37328f9a1ff59bb77b63bc97480cf2778b64"
+      "license_text_sha256": "ffe3b1e0b58c1f1250ce48f84d8c37328f9a1ff59bb77b63bc97480cf2778b64",
+      "license_section_start_line": 697,
+      "license_text_byte_offset": 39254,
+      "license_text_byte_length": 19337,
+      "license_section": "mae"
     },
     {
       "key": "ijepa",
@@ -54,10 +70,14 @@
       "verification_commit": "52c1ae95d05f743e000e8f10a1f3a79b10cff048",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/ijepa/blob/52c1ae95d05f743e000e8f10a1f3a79b10cff048/LICENSE",
-      "license_file": "LICENSES/I-JEPA-CC-BY-NC-4.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "CC-BY-NC-4.0",
       "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.",
-      "sha256": "336255dc30193e8e15d689d9481bb05673d89055718f3a96923a7ffb99adbbaf"
+      "license_text_sha256": "336255dc30193e8e15d689d9481bb05673d89055718f3a96923a7ffb99adbbaf",
+      "license_section_start_line": 1113,
+      "license_text_byte_offset": 59345,
+      "license_text_byte_length": 19333,
+      "license_section": "ijepa"
     },
     {
       "key": "msn",
@@ -65,10 +85,14 @@
       "verification_commit": "4388dc1eadbe3042b85d3296d41b9b207656e043",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/msn/blob/4388dc1eadbe3042b85d3296d41b9b207656e043/LICENSE",
-      "license_file": "LICENSES/MSN-CC-BY-NC-4.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "CC-BY-NC-4.0 (root; backbone file has Apache-2.0 notice)",
       "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.",
-      "sha256": "1b0556efdc7e72b17b706c041002c6cdc1e0aa257f5e5676ea0f887b2f0854ec"
+      "license_text_sha256": "1b0556efdc7e72b17b706c041002c6cdc1e0aa257f5e5676ea0f887b2f0854ec",
+      "license_section_start_line": 1529,
+      "license_text_byte_offset": 79470,
+      "license_text_byte_length": 19337,
+      "license_section": "msn"
     },
     {
       "key": "swav",
@@ -76,10 +100,14 @@
       "verification_commit": "06b1b7cbaf6ba2a792300d79c7299db98b93b7f9",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/swav/blob/06b1b7cbaf6ba2a792300d79c7299db98b93b7f9/LICENSE",
-      "license_file": "LICENSES/SwAV-CC-BY-NC-4.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "CC-BY-NC-4.0",
       "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates.",
-      "sha256": "82656a050544ab820c9aa7b61433f5181f8e80cacd042377140962a3e3eb5721"
+      "license_text_sha256": "82656a050544ab820c9aa7b61433f5181f8e80cacd042377140962a3e3eb5721",
+      "license_section_start_line": 1945,
+      "license_text_byte_offset": 99534,
+      "license_text_byte_length": 19332,
+      "license_section": "swav"
     },
     {
       "key": "simsiam",
@@ -87,10 +115,14 @@
       "verification_commit": "a7bc1772896d0dad0806c51f0bb6f3b16d290468",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/simsiam/blob/a7bc1772896d0dad0806c51f0bb6f3b16d290468/LICENSE",
-      "license_file": "LICENSES/SimSiam-CC-BY-NC-4.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "CC-BY-NC-4.0",
       "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.",
-      "sha256": "4d642d88f2f4a61d293163cfdace519d75589148c1ba92364dc65682034f75fc"
+      "license_text_sha256": "4d642d88f2f4a61d293163cfdace519d75589148c1ba92364dc65682034f75fc",
+      "license_section_start_line": 2361,
+      "license_text_byte_offset": 119628,
+      "license_text_byte_length": 19334,
+      "license_section": "simsiam"
     },
     {
       "key": "barlowtwins",
@@ -98,10 +130,14 @@
       "verification_commit": "8e8d284ca0bc02f88b92328e53f9b901e86b4a3c",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/barlowtwins/blob/8e8d284ca0bc02f88b92328e53f9b901e86b4a3c/LICENSE",
-      "license_file": "LICENSES/BarlowTwins-MIT.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "MIT",
       "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates.",
-      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+      "license_text_sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+      "license_section_start_line": 2776,
+      "license_text_byte_offset": 139716,
+      "license_text_byte_length": 1086,
+      "license_section": "barlowtwins"
     },
     {
       "key": "vicreg",
@@ -109,10 +145,14 @@
       "verification_commit": "4e12602fd495af83efd1631fbe82523e6db092e0",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/vicreg/blob/4e12602fd495af83efd1631fbe82523e6db092e0/LICENSE",
-      "license_file": "LICENSES/VICReg-MIT.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "MIT",
       "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates. / Copyright (c) Meta Platforms, Inc. and affiliates. in main_vicreg.py",
-      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+      "license_text_sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+      "license_section_start_line": 2814,
+      "license_text_byte_offset": 141615,
+      "license_text_byte_length": 1086,
+      "license_section": "vicreg"
     },
     {
       "key": "moco",
@@ -120,10 +160,14 @@
       "verification_commit": "7397dfe146c7ca6bbb58e9c382498069178ba764",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/moco/blob/7397dfe146c7ca6bbb58e9c382498069178ba764/LICENSE",
-      "license_file": "LICENSES/MoCo-MIT.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "MIT",
       "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates. Existing local Facebook notices are retained.",
-      "sha256": "155419f3d7fed7028e2302e296c7b35e704e305d87e3c0fc5fb02a115c03e0b4"
+      "license_text_sha256": "155419f3d7fed7028e2302e296c7b35e704e305d87e3c0fc5fb02a115c03e0b4",
+      "license_section_start_line": 2852,
+      "license_text_byte_offset": 143473,
+      "license_text_byte_length": 1088,
+      "license_section": "moco"
     },
     {
       "key": "torchvision",
@@ -131,10 +175,14 @@
       "verification_commit": "b68adcf9a9280aef02fc08daed170d74d0892361",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/pytorch/vision/blob/b68adcf9a9280aef02fc08daed170d74d0892361/LICENSE",
-      "license_file": "LICENSES/TorchVision-BSD-3-Clause.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "BSD-3-Clause",
       "copyright_notice": "Copyright (c) Soumith Chintala 2016,",
-      "sha256": "6502f676851cfe25f8af75531dfb32375b7325b73c37e7b43741fa422893e71d"
+      "license_text_sha256": "6502f676851cfe25f8af75531dfb32375b7325b73c37e7b43741fa422893e71d",
+      "license_section_start_line": 2890,
+      "license_text_byte_offset": 145278,
+      "license_text_byte_length": 1517,
+      "license_section": "torchvision"
     },
     {
       "key": "dinov3",
@@ -142,10 +190,14 @@
       "verification_commit": "6876159a11b4df116f30f667f8c9888617df0751",
       "upstream_license_path": "LICENSE.md",
       "upstream_license_url": "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/LICENSE.md",
-      "license_file": "LICENSES/DINOv3.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "DINOv3 License Agreement, last updated August 19, 2025",
       "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates.",
-      "sha256": "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e"
+      "license_text_sha256": "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e",
+      "license_section_start_line": 2936,
+      "license_text_byte_offset": 147596,
+      "license_text_byte_length": 7503,
+      "license_section": "dinov3"
     },
     {
       "key": "simclr_converter",
@@ -153,10 +205,14 @@
       "verification_commit": "139d3cb0bd0c64b5ad32aab810e0bd0a0dddaae0",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/tonylins/simclr-converter/blob/139d3cb0bd0c64b5ad32aab810e0bd0a0dddaae0/LICENSE",
-      "license_file": "LICENSES/SimCLR-Converter-Apache-2.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "Apache-2.0",
       "copyright_notice": "Copyright [2020] [Ji Lin] (upstream LICENSE appendix)",
-      "sha256": "b0b597fc27176b5385c14dd21e45af3b4c974f161c3e63469bca0097afa009ba"
+      "license_text_sha256": "b0b597fc27176b5385c14dd21e45af3b4c974f161c3e63469bca0097afa009ba",
+      "license_section_start_line": 3019,
+      "license_text_byte_offset": 155867,
+      "license_text_byte_length": 11340,
+      "license_section": "simclr_converter"
     },
     {
       "key": "pytorch",
@@ -164,10 +220,14 @@
       "verification_commit": "0398ae1ef13f587e49d96aece24d334d88f562a7",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/pytorch/pytorch/blob/0398ae1ef13f587e49d96aece24d334d88f562a7/LICENSE",
-      "license_file": "LICENSES/PyTorch-BSD.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "BSD-style terms; full upstream copyright list retained in license text",
       "copyright_notice": "Multiple copyright holders listed in the full PyTorch license.",
-      "sha256": "bd018feef8825e88181c84eb7e3aa4eafb8f08a20d9fd6ef948569610c4a3e43"
+      "license_text_sha256": "bd018feef8825e88181c84eb7e3aa4eafb8f08a20d9fd6ef948569610c4a3e43",
+      "license_section_start_line": 3237,
+      "license_text_byte_offset": 168026,
+      "license_text_byte_length": 3464,
+      "license_section": "pytorch"
     },
     {
       "key": "timm",
@@ -175,10 +235,14 @@
       "verification_commit": "cfc742eb6a4bc4bb35ef20c9b2d5a2a31f599bba",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/huggingface/pytorch-image-models/blob/cfc742eb6a4bc4bb35ef20c9b2d5a2a31f599bba/LICENSE",
-      "license_file": "LICENSES/timm-Apache-2.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "Apache-2.0",
       "copyright_notice": "Copyright 2019 Ross Wightman (upstream LICENSE appendix)",
-      "sha256": "71b111620fa32c17a80ccd6db2da759d31a591e497d8b5f382174f59d1b59d49"
+      "license_text_sha256": "71b111620fa32c17a80ccd6db2da759d31a591e497d8b5f382174f59d1b59d49",
+      "license_section_start_line": 3338,
+      "license_text_byte_offset": 172253,
+      "license_text_byte_length": 11343,
+      "license_section": "timm"
     },
     {
       "key": "bolts",
@@ -186,10 +250,14 @@
       "verification_commit": "34958a8892d42714edf02ba896fd5861ebb3cb7e",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/Lightning-Universe/lightning-bolts/blob/34958a8892d42714edf02ba896fd5861ebb3cb7e/LICENSE",
-      "license_file": "LICENSES/Lightning-Bolts-Apache-2.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "Apache-2.0",
       "copyright_notice": "Copyright 2018-2021 William Falcon (upstream LICENSE appendix)",
-      "sha256": "a41e2fae9915ae56028f8dbd0bf27995f1907613cbcd2d81a61b010ad34e9fe9"
+      "license_text_sha256": "a41e2fae9915ae56028f8dbd0bf27995f1907613cbcd2d81a61b010ad34e9fe9",
+      "license_section_start_line": 3556,
+      "license_text_byte_offset": 184365,
+      "license_text_byte_length": 11349,
+      "license_section": "bolts"
     },
     {
       "key": "moco_v3",
@@ -197,10 +265,14 @@
       "verification_commit": "c349e6e24f40d3fedb22d973f92defa4cedf37a7",
       "upstream_license_path": "LICENSE",
       "upstream_license_url": "https://github.com/facebookresearch/moco-v3/blob/c349e6e24f40d3fedb22d973f92defa4cedf37a7/LICENSE",
-      "license_file": "LICENSES/MoCo-v3-CC-BY-NC-4.0.txt",
+      "license_file": "LICENSES/THIRD_PARTY_LICENSES.txt",
       "license": "CC-BY-NC-4.0",
       "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.",
-      "sha256": "4d642d88f2f4a61d293163cfdace519d75589148c1ba92364dc65682034f75fc"
+      "license_text_sha256": "4d642d88f2f4a61d293163cfdace519d75589148c1ba92364dc65682034f75fc",
+      "license_section_start_line": 3774,
+      "license_text_byte_offset": 196478,
+      "license_text_byte_length": 19334,
+      "license_section": "moco_v3"
     },
     {
       "key": "byol_converter",
@@ -211,7 +283,7 @@
       "license_file": null,
       "license": "NOASSERTION: no explicit license found",
       "copyright_notice": "No explicit copyright/license notice found in the audited converter source.",
-      "sha256": null
+      "license_text_sha256": null
     }
   ],
   "components": [
@@ -773,5 +845,13 @@
     "Exact copying route for repeat_interleave_batch and truncated-normal intermediary not established.",
     "No external source identified for NanoPark.py/Hochuli.py; absence of notices does not establish authorship or a license.",
     "Project-authored contributions have not received a new license in this documentation change."
-  ]
+  ],
+  "license_bundle": {
+    "path": "LICENSES/THIRD_PARTY_LICENSES.txt",
+    "sha256": "b28fd345bd86a02e6ece66451e2a91e16423cd8f6d4e4ec1176cbbc6af389f5c",
+    "section_count": 18,
+    "format": "UTF-8 text with separate project sections and byte-preserved original license texts.",
+    "checksum_scope": "Bundle hash covers the complete file. Each source license_text_sha256 covers only the original text slice identified by license_text_byte_offset/length."
+  },
+  "license_guide": "LICENSES/README.md"
 }

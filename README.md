@@ -4,7 +4,7 @@
 
 15 self-supervised methods · Pretraining · Linear evaluation · Fine-tuning
 
-[Quick start](#quick-start) · [Methods](#available-methods) · [Training & evaluation](#training--evaluation) · [Results](#results) · [Experiment archive](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library)
+[Quick start](#quick-start) · [Methods](#available-methods) · [Training & evaluation](#training--evaluation) · [Results](#results) · [Licensing](#licensing) · [Experiment archive](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library)
 
 </div>
 
@@ -281,10 +281,20 @@ Run IDs correspond to the table above. LR sequences describe initial / peak / fi
 
 Full training runs and additional hyperparameter experiments are available in the [Hugging Face experiment archive](https://huggingface.co/buckets/LoanMaikon/Self-Supervised-Library), including training curves, learning rate and weight decay schedules, EMA, losses, and linear evaluation metrics.
 
+## Licensing
+
+The repository incorporates source under **Apache-2.0, MIT, CC BY-NC 4.0, BSD-style terms, and the DINOv3 License Agreement**. [LICENSE](LICENSE) records their scope; [third-party notices](LICENSES/THIRD_PARTY_NOTICES) document the files, functions, sources, and attribution. Full upstream texts and verification metadata are in [LICENSES/](LICENSES).
+
+**The current workflows include noncommercial components:** all 15 methods and evaluation use shared schedulers derived from I-JEPA. Other shared utilities also contain CC BY-NC code. The license of a method's backbone alone does not describe the permissions for the complete workflow.
+
+The backbone in `src/methods/byol/resnet.py` comes from a converter for which no explicit license was found. Its permission status remains unresolved. No new license has been selected for the project's own contributions; this documentation does not grant additional rights or establish complete licensing clearance. Dataset and externally downloaded checkpoint terms are separate.
+
 ## Repository structure
 
 ```text
 Self-Supervised-Library/
+├── LICENSE                 # License scope index
+├── LICENSES/               # Upstream license texts, notices, and source metadata
 ├── main.py                 # Training and evaluation entry point
 ├── configs/
 │   ├── pretraining/         # One pretraining configuration per method

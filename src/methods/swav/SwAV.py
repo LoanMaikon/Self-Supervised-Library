@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: CC-BY-NC-4.0.
+# Full upstream license copy: LICENSES/SwAV-CC-BY-NC-4.0.txt
+
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2

@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright 2018-2021 William Falcon (upstream LICENSE appendix)
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: Apache-2.0.
+# Full upstream license copy: LICENSES/Lightning-Bolts-Apache-2.0.txt
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

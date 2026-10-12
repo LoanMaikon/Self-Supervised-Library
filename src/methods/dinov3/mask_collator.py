@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: DINOv3 License Agreement, last updated August 19, 2025.
+# Full upstream license copy: LICENSES/DINOv3.txt
+
 # Adapted from facebookresearch/dinov3 data masking/collate utilities.
 # Keeps backward compatibility with datasets that return a flat list of crops.
 

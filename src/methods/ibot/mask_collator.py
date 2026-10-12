@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) ByteDance, Inc. and its affiliates. All rights reserved.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: Apache-2.0.
+# Full upstream license copy: LICENSES/iBOT-Apache-2.0.txt
+
 # https://github.com/bytedance/ibot/blob/main/loader.py
 
 from multiprocessing import Value

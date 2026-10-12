@@ -1,0 +1,777 @@
+{
+  "audit_date": "2026-10-12",
+  "audited_local_commit": "a8cbf81aea15a0de197a905a52f600f42482041b",
+  "project_license": "No new license selected; documentation of existing terms only.",
+  "snapshot_note": "Upstream commits are verification snapshots, not a claim that those exact revisions were copied. Code provenance and license history were checked separately.",
+  "sources": [
+    {
+      "key": "dino",
+      "repository": "https://github.com/facebookresearch/dino",
+      "verification_commit": "7c446df5b9f45747937fb0d72314eb9f7b66930a",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/dino/blob/7c446df5b9f45747937fb0d72314eb9f7b66930a/LICENSE",
+      "license_file": "LICENSES/DINO-Apache-2.0.txt",
+      "license": "Apache-2.0",
+      "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates.",
+      "sha256": "50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a"
+    },
+    {
+      "key": "dinov2",
+      "repository": "https://github.com/facebookresearch/dinov2",
+      "verification_commit": "7764ea0f912e53c92e82eb78a2a1631e92725fc8",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/LICENSE",
+      "license_file": "LICENSES/DINOv2-Apache-2.0.txt",
+      "license": "Apache-2.0",
+      "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates.",
+      "sha256": "600cc67cc4cb2f5ea317dcfc687ad1c74dc4bec8782bbe9db0afd83513b935b7"
+    },
+    {
+      "key": "ibot",
+      "repository": "https://github.com/bytedance/ibot",
+      "verification_commit": "da316d82636a7a7356835ef224b13d5f3ace0489",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/bytedance/ibot/blob/da316d82636a7a7356835ef224b13d5f3ace0489/LICENSE",
+      "license_file": "LICENSES/iBOT-Apache-2.0.txt",
+      "license": "Apache-2.0",
+      "copyright_notice": "Copyright (c) ByteDance, Inc. and its affiliates. All rights reserved.",
+      "sha256": "283ea6cc2997a1a70da0049e09adf9317bb60ca1b51279b65196b83a69e1996b"
+    },
+    {
+      "key": "mae",
+      "repository": "https://github.com/facebookresearch/mae",
+      "verification_commit": "efb2a8062c206524e35e47d04501ed4f544c0ae8",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/mae/blob/efb2a8062c206524e35e47d04501ed4f544c0ae8/LICENSE",
+      "license_file": "LICENSES/MAE-CC-BY-NC-4.0.txt",
+      "license": "CC-BY-NC-4.0",
+      "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.",
+      "sha256": "ffe3b1e0b58c1f1250ce48f84d8c37328f9a1ff59bb77b63bc97480cf2778b64"
+    },
+    {
+      "key": "ijepa",
+      "repository": "https://github.com/facebookresearch/ijepa",
+      "verification_commit": "52c1ae95d05f743e000e8f10a1f3a79b10cff048",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/ijepa/blob/52c1ae95d05f743e000e8f10a1f3a79b10cff048/LICENSE",
+      "license_file": "LICENSES/I-JEPA-CC-BY-NC-4.0.txt",
+      "license": "CC-BY-NC-4.0",
+      "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.",
+      "sha256": "336255dc30193e8e15d689d9481bb05673d89055718f3a96923a7ffb99adbbaf"
+    },
+    {
+      "key": "msn",
+      "repository": "https://github.com/facebookresearch/msn",
+      "verification_commit": "4388dc1eadbe3042b85d3296d41b9b207656e043",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/msn/blob/4388dc1eadbe3042b85d3296d41b9b207656e043/LICENSE",
+      "license_file": "LICENSES/MSN-CC-BY-NC-4.0.txt",
+      "license": "CC-BY-NC-4.0 (root; backbone file has Apache-2.0 notice)",
+      "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.",
+      "sha256": "1b0556efdc7e72b17b706c041002c6cdc1e0aa257f5e5676ea0f887b2f0854ec"
+    },
+    {
+      "key": "swav",
+      "repository": "https://github.com/facebookresearch/swav",
+      "verification_commit": "06b1b7cbaf6ba2a792300d79c7299db98b93b7f9",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/swav/blob/06b1b7cbaf6ba2a792300d79c7299db98b93b7f9/LICENSE",
+      "license_file": "LICENSES/SwAV-CC-BY-NC-4.0.txt",
+      "license": "CC-BY-NC-4.0",
+      "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates.",
+      "sha256": "82656a050544ab820c9aa7b61433f5181f8e80cacd042377140962a3e3eb5721"
+    },
+    {
+      "key": "simsiam",
+      "repository": "https://github.com/facebookresearch/simsiam",
+      "verification_commit": "a7bc1772896d0dad0806c51f0bb6f3b16d290468",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/simsiam/blob/a7bc1772896d0dad0806c51f0bb6f3b16d290468/LICENSE",
+      "license_file": "LICENSES/SimSiam-CC-BY-NC-4.0.txt",
+      "license": "CC-BY-NC-4.0",
+      "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.",
+      "sha256": "4d642d88f2f4a61d293163cfdace519d75589148c1ba92364dc65682034f75fc"
+    },
+    {
+      "key": "barlowtwins",
+      "repository": "https://github.com/facebookresearch/barlowtwins",
+      "verification_commit": "8e8d284ca0bc02f88b92328e53f9b901e86b4a3c",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/barlowtwins/blob/8e8d284ca0bc02f88b92328e53f9b901e86b4a3c/LICENSE",
+      "license_file": "LICENSES/BarlowTwins-MIT.txt",
+      "license": "MIT",
+      "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates.",
+      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+    },
+    {
+      "key": "vicreg",
+      "repository": "https://github.com/facebookresearch/vicreg",
+      "verification_commit": "4e12602fd495af83efd1631fbe82523e6db092e0",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/vicreg/blob/4e12602fd495af83efd1631fbe82523e6db092e0/LICENSE",
+      "license_file": "LICENSES/VICReg-MIT.txt",
+      "license": "MIT",
+      "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates. / Copyright (c) Meta Platforms, Inc. and affiliates. in main_vicreg.py",
+      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+    },
+    {
+      "key": "moco",
+      "repository": "https://github.com/facebookresearch/moco",
+      "verification_commit": "7397dfe146c7ca6bbb58e9c382498069178ba764",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/moco/blob/7397dfe146c7ca6bbb58e9c382498069178ba764/LICENSE",
+      "license_file": "LICENSES/MoCo-MIT.txt",
+      "license": "MIT",
+      "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates. Existing local Facebook notices are retained.",
+      "sha256": "155419f3d7fed7028e2302e296c7b35e704e305d87e3c0fc5fb02a115c03e0b4"
+    },
+    {
+      "key": "torchvision",
+      "repository": "https://github.com/pytorch/vision",
+      "verification_commit": "b68adcf9a9280aef02fc08daed170d74d0892361",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/pytorch/vision/blob/b68adcf9a9280aef02fc08daed170d74d0892361/LICENSE",
+      "license_file": "LICENSES/TorchVision-BSD-3-Clause.txt",
+      "license": "BSD-3-Clause",
+      "copyright_notice": "Copyright (c) Soumith Chintala 2016,",
+      "sha256": "6502f676851cfe25f8af75531dfb32375b7325b73c37e7b43741fa422893e71d"
+    },
+    {
+      "key": "dinov3",
+      "repository": "https://github.com/facebookresearch/dinov3",
+      "verification_commit": "6876159a11b4df116f30f667f8c9888617df0751",
+      "upstream_license_path": "LICENSE.md",
+      "upstream_license_url": "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/LICENSE.md",
+      "license_file": "LICENSES/DINOv3.txt",
+      "license": "DINOv3 License Agreement, last updated August 19, 2025",
+      "copyright_notice": "Copyright (c) Meta Platforms, Inc. and affiliates.",
+      "sha256": "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e"
+    },
+    {
+      "key": "simclr_converter",
+      "repository": "https://github.com/tonylins/simclr-converter",
+      "verification_commit": "139d3cb0bd0c64b5ad32aab810e0bd0a0dddaae0",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/tonylins/simclr-converter/blob/139d3cb0bd0c64b5ad32aab810e0bd0a0dddaae0/LICENSE",
+      "license_file": "LICENSES/SimCLR-Converter-Apache-2.0.txt",
+      "license": "Apache-2.0",
+      "copyright_notice": "Copyright [2020] [Ji Lin] (upstream LICENSE appendix)",
+      "sha256": "b0b597fc27176b5385c14dd21e45af3b4c974f161c3e63469bca0097afa009ba"
+    },
+    {
+      "key": "pytorch",
+      "repository": "https://github.com/pytorch/pytorch",
+      "verification_commit": "0398ae1ef13f587e49d96aece24d334d88f562a7",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/pytorch/pytorch/blob/0398ae1ef13f587e49d96aece24d334d88f562a7/LICENSE",
+      "license_file": "LICENSES/PyTorch-BSD.txt",
+      "license": "BSD-style terms; full upstream copyright list retained in license text",
+      "copyright_notice": "Multiple copyright holders listed in the full PyTorch license.",
+      "sha256": "bd018feef8825e88181c84eb7e3aa4eafb8f08a20d9fd6ef948569610c4a3e43"
+    },
+    {
+      "key": "timm",
+      "repository": "https://github.com/huggingface/pytorch-image-models",
+      "verification_commit": "cfc742eb6a4bc4bb35ef20c9b2d5a2a31f599bba",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/huggingface/pytorch-image-models/blob/cfc742eb6a4bc4bb35ef20c9b2d5a2a31f599bba/LICENSE",
+      "license_file": "LICENSES/timm-Apache-2.0.txt",
+      "license": "Apache-2.0",
+      "copyright_notice": "Copyright 2019 Ross Wightman (upstream LICENSE appendix)",
+      "sha256": "71b111620fa32c17a80ccd6db2da759d31a591e497d8b5f382174f59d1b59d49"
+    },
+    {
+      "key": "bolts",
+      "repository": "https://github.com/Lightning-Universe/lightning-bolts",
+      "verification_commit": "34958a8892d42714edf02ba896fd5861ebb3cb7e",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/Lightning-Universe/lightning-bolts/blob/34958a8892d42714edf02ba896fd5861ebb3cb7e/LICENSE",
+      "license_file": "LICENSES/Lightning-Bolts-Apache-2.0.txt",
+      "license": "Apache-2.0",
+      "copyright_notice": "Copyright 2018-2021 William Falcon (upstream LICENSE appendix)",
+      "sha256": "a41e2fae9915ae56028f8dbd0bf27995f1907613cbcd2d81a61b010ad34e9fe9"
+    },
+    {
+      "key": "moco_v3",
+      "repository": "https://github.com/facebookresearch/moco-v3",
+      "verification_commit": "c349e6e24f40d3fedb22d973f92defa4cedf37a7",
+      "upstream_license_path": "LICENSE",
+      "upstream_license_url": "https://github.com/facebookresearch/moco-v3/blob/c349e6e24f40d3fedb22d973f92defa4cedf37a7/LICENSE",
+      "license_file": "LICENSES/MoCo-v3-CC-BY-NC-4.0.txt",
+      "license": "CC-BY-NC-4.0",
+      "copyright_notice": "Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.",
+      "sha256": "4d642d88f2f4a61d293163cfdace519d75589148c1ba92364dc65682034f75fc"
+    },
+    {
+      "key": "byol_converter",
+      "repository": "https://github.com/ajtejankar/byol-convert",
+      "verification_commit": "7497e7f12016064704c2ad04dc3c90364e80d4a7",
+      "upstream_license_path": null,
+      "upstream_license_url": null,
+      "license_file": null,
+      "license": "NOASSERTION: no explicit license found",
+      "copyright_notice": "No explicit copyright/license notice found in the audited converter source.",
+      "sha256": null
+    }
+  ],
+  "components": [
+    {
+      "local_paths": [
+        "src/methods/simclr/resnet.py"
+      ],
+      "source_key": "simclr_converter",
+      "upstream_source_urls": [
+        "https://github.com/tonylins/simclr-converter/blob/139d3cb0bd0c64b5ad32aab810e0bd0a0dddaae0/resnet_wider.py"
+      ],
+      "covered_portions": "ResNet source adapted from the converter; project-specific checkpoint/evaluation helpers are not granted a new license.",
+      "provenance_evidence": "Explicit local source attribution and matching ResNet structure.",
+      "local_modifications": "Local architecture interface, activation checkpointing, weight loading, evaluation helpers and projection-head integration.",
+      "additional_license_keys": [
+        "torchvision"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/methods/byol/resnet.py"
+      ],
+      "source_key": "byol_converter",
+      "upstream_source_urls": [
+        "https://github.com/ajtejankar/byol-convert/blob/7497e7f12016064704c2ad04dc3c90364e80d4a7/resnet.py"
+      ],
+      "covered_portions": "Converter-derived ResNet and SAME-padding portions: permission unresolved.",
+      "provenance_evidence": "Explicit local source URL and matching converter code; full audited upstream tree had no LICENSE/COPYING/NOTICE file, and README/source contained no explicit grant.",
+      "local_modifications": "Local checkpointing, BYOL model variants and evaluation helpers. No permission is inferred from the BYOL paper, DeepMind repository, or a public GitHub URL.",
+      "additional_license_keys": [
+        "torchvision"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov1/models.py"
+      ],
+      "source_key": "dino",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dino/blob/7c446df5b9f45747937fb0d72314eb9f7b66930a/vision_transformer.py"
+      ],
+      "covered_portions": "Adapted transformer and DINO head portions; existing Apache file notice retained.",
+      "provenance_evidence": "Declared source and substantial matching blocks.",
+      "local_modifications": "Local checkpointing, model construction and evaluation/weight-loading helpers.",
+      "additional_license_keys": [
+        "timm"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov2/models.py"
+      ],
+      "source_key": "dinov2",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/models/vision_transformer.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/layers/mlp.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/layers/attention.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/layers/block.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/layers/layer_scale.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/layers/drop_path.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/layers/patch_embed.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/layers/swiglu_ffn.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/layers/dino_head.py"
+      ],
+      "covered_portions": "Consolidated upstream transformer/layers including channel_adaptive and PatchEmbed; inspected sources have explicit Apache-2.0 headers.",
+      "provenance_evidence": "Declared source, matching consolidated layers and preserved Meta notice.",
+      "local_modifications": "Consolidation, checkpointing and local loading/evaluation interfaces.",
+      "additional_license_keys": [
+        "dino",
+        "timm"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov2/mask_collator.py"
+      ],
+      "source_key": "dinov2",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/data/masking.py",
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/data/collate.py"
+      ],
+      "covered_portions": "Adapted masking generator and crop collation.",
+      "provenance_evidence": "Declared upstream and matching blocks.",
+      "local_modifications": "Consolidation and integration with the local dataset/crop interface.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov2/dino_loss.py"
+      ],
+      "source_key": "dinov2",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/loss/dino_clstoken_loss.py"
+      ],
+      "covered_portions": "Adapted DINO loss.",
+      "provenance_evidence": "Declared source and retained copyright.",
+      "local_modifications": "Integration with local training and scheduling.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov2/ibot_loss.py"
+      ],
+      "source_key": "dinov2",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/loss/ibot_patch_loss.py"
+      ],
+      "covered_portions": "Adapted patch loss.",
+      "provenance_evidence": "Declared source and retained copyright.",
+      "local_modifications": "Integration with local training.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/koleo_loss.py"
+      ],
+      "source_key": "dinov2",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/loss/koleo_loss.py"
+      ],
+      "covered_portions": "KoLeo implementation.",
+      "provenance_evidence": "Declared source and matching implementation.",
+      "local_modifications": "Local shared-module integration; upstream notice restored.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov2/DINOv2.py"
+      ],
+      "source_key": "dinov2",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov2/blob/7764ea0f912e53c92e82eb78a2a1631e92725fc8/dinov2/train/ssl_meta_arch.py"
+      ],
+      "covered_portions": "Teacher-output, token-selection and loss-computation portions in train(); surrounding local controller is not assigned a new license.",
+      "provenance_evidence": "Matching blocks at baseline lines 116-123, 151-163 and 199-213.",
+      "local_modifications": "Restructured into the local training/configuration/checkpoint workflow.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/mae/models.py"
+      ],
+      "source_key": "mae",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/mae/blob/efb2a8062c206524e35e47d04501ed4f544c0ae8/models_mae.py"
+      ],
+      "covered_portions": "Adapted masked autoencoder source.",
+      "provenance_evidence": "Declared source and substantial matching blocks.",
+      "local_modifications": "Model variants, activation checkpointing and local evaluation/weight-loading helpers.",
+      "additional_license_keys": [
+        "timm"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/pos_embed.py"
+      ],
+      "source_key": "mae",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/mae/blob/efb2a8062c206524e35e47d04501ed4f544c0ae8/util/pos_embed.py"
+      ],
+      "covered_portions": "Copied/adapted positional embedding and interpolation utilities.",
+      "provenance_evidence": "Declared source and near-verbatim implementation.",
+      "local_modifications": "numpy float dtype adaptation and import/module organization. Original TensorFlow, MoCo v3 and DeiT references are retained.",
+      "additional_license_keys": [
+        "moco_v3"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/methods/ijepa/models.py"
+      ],
+      "source_key": "ijepa",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/ijepa/blob/52c1ae95d05f743e000e8f10a1f3a79b10cff048/src/models/vision_transformer.py",
+        "https://github.com/facebookresearch/ijepa/blob/52c1ae95d05f743e000e8f10a1f3a79b10cff048/src/masks/utils.py"
+      ],
+      "covered_portions": "Adapted encoder/predictor and masking helpers.",
+      "provenance_evidence": "Declared source and matching model blocks; exact copied revision not recorded.",
+      "local_modifications": "Integration with shared positional embeddings, checkpointing and local evaluation interfaces.",
+      "additional_license_keys": [
+        "mae"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/methods/ijepa/mask_collator.py"
+      ],
+      "source_key": "ijepa",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/ijepa/blob/52c1ae95d05f743e000e8f10a1f3a79b10cff048/src/masks/multiblock.py"
+      ],
+      "covered_portions": "Adapted MaskCollator.",
+      "provenance_evidence": "Declared source and matching blocks.",
+      "local_modifications": "Integration with the local dataloader and configuration.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/ibot/models.py"
+      ],
+      "source_key": "ibot",
+      "upstream_source_urls": [
+        "https://github.com/bytedance/ibot/blob/da316d82636a7a7356835ef224b13d5f3ace0489/models/vision_transformer.py"
+      ],
+      "covered_portions": "Adapted iBOT transformer/head source.",
+      "provenance_evidence": "Declared source, retained ByteDance notice and matching blocks.",
+      "local_modifications": "Checkpointing and local weight-loading/evaluation interfaces.",
+      "additional_license_keys": [
+        "dino",
+        "timm"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/methods/ibot/mask_collator.py"
+      ],
+      "source_key": "ibot",
+      "upstream_source_urls": [
+        "https://github.com/bytedance/ibot/blob/da316d82636a7a7356835ef224b13d5f3ace0489/loader.py"
+      ],
+      "covered_portions": "Adapted mask-ratio and masking portions.",
+      "provenance_evidence": "Declared source and matching portions.",
+      "local_modifications": "Extraction into a local masking/collation module.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/msn/models.py"
+      ],
+      "source_key": "msn",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/msn/blob/4388dc1eadbe3042b85d3296d41b9b207656e043/src/deit.py"
+      ],
+      "covered_portions": "Explicit Apache-2.0 file header in both upstream deit.py and local models.py; root LICENSE is CC-BY-NC-4.0. Preserve both and do not infer an Apache license for the entire MSN workflow.",
+      "provenance_evidence": "Preserved Facebook Apache header and matching transformer source; upstream root/header difference documented.",
+      "local_modifications": "Local checkpointing and model/evaluation interfaces.",
+      "additional_license_keys": [
+        "dino",
+        "timm"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/methods/msn/msn_loss.py"
+      ],
+      "source_key": "msn",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/msn/blob/4388dc1eadbe3042b85d3296d41b9b207656e043/src/losses.py",
+        "https://github.com/facebookresearch/msn/blob/4388dc1eadbe3042b85d3296d41b9b207656e043/src/utils.py"
+      ],
+      "covered_portions": "MSN loss, Sinkhorn and AllReduce source portions.",
+      "provenance_evidence": "Declared losses source and additional matching AllReduce utility.",
+      "local_modifications": "Integration with local training, schedules and distributed execution.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov3/models.py"
+      ],
+      "source_key": "dinov3",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/dinov3/models/vision_transformer.py"
+      ],
+      "covered_portions": "Incorporated DINOv3 model/layer/head source and adaptations; specific additional layer definitions consolidated locally.",
+      "provenance_evidence": "Explicit source and DINOv3 Agreement header; audited agreement defines software/training code as DINO Materials.",
+      "local_modifications": "Consolidation, checkpointing and local construction/weight-loading interfaces. Exact copied revision and full layer-by-layer import history are not recorded.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov3/mask_collator.py"
+      ],
+      "source_key": "dinov3",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/dinov3/data/masking.py",
+        "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/dinov3/data/collate.py"
+      ],
+      "covered_portions": "Adapted DINOv3 masking/collation source.",
+      "provenance_evidence": "Explicit local adaptation statement and verified upstream agreement headers.",
+      "local_modifications": "Support for local flat-list crops and backward-compatible collation.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov3/dino_clstoken_loss.py"
+      ],
+      "source_key": "dinov3",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/dinov3/loss/dino_clstoken_loss.py"
+      ],
+      "covered_portions": "Incorporated DINOv3 loss source and adaptations.",
+      "provenance_evidence": "Explicit source and preserved DINOv3 Agreement/copyright header.",
+      "local_modifications": "Integration into the local training pipeline.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov3/ibot_patch_loss.py"
+      ],
+      "source_key": "dinov3",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/dinov3/loss/ibot_patch_loss.py"
+      ],
+      "covered_portions": "Incorporated DINOv3 loss source and adaptations.",
+      "provenance_evidence": "Explicit source and preserved DINOv3 Agreement/copyright header.",
+      "local_modifications": "Integration into the local training pipeline.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov3/gram_loss.py"
+      ],
+      "source_key": "dinov3",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/dinov3/loss/gram_loss.py"
+      ],
+      "covered_portions": "Incorporated DINOv3 loss source and adaptations.",
+      "provenance_evidence": "Explicit source and preserved DINOv3 Agreement/copyright header.",
+      "local_modifications": "Integration into the local training pipeline.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/dinov3/koleo_loss.py"
+      ],
+      "source_key": "dinov3",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/dinov3/loss/koleo_loss.py"
+      ],
+      "covered_portions": "Incorporated DINOv3 loss source and adaptations.",
+      "provenance_evidence": "Explicit source and preserved DINOv3 Agreement/copyright header.",
+      "local_modifications": "Integration into the local training pipeline.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/swav/resnet.py"
+      ],
+      "source_key": "swav",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/swav/blob/06b1b7cbaf6ba2a792300d79c7299db98b93b7f9/src/resnet50.py"
+      ],
+      "covered_portions": "CC-BY-NC-4.0; applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "Local declared source; 256 of 389 nonblank lines matching upstream, including a contiguous 106-line block.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": [
+        "torchvision"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/sinkhorn.py"
+      ],
+      "source_key": "swav",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/swav/blob/06b1b7cbaf6ba2a792300d79c7299db98b93b7f9/main_swav.py"
+      ],
+      "covered_portions": "CC-BY-NC-4.0; applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "Local declared source; distributed_sinkhorn adapted with arguments, optional distributed guards, eps clamps.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/swav/SwAV.py"
+      ],
+      "source_key": "swav",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/swav/blob/06b1b7cbaf6ba2a792300d79c7299db98b93b7f9/main_swav.py"
+      ],
+      "covered_portions": "CC-BY-NC-4.0 for adapted portions; applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "_compute_swav_loss carries queue update, assignment computation and swapped prediction loop matching main_swav.py train(); surrounding configuration/logging/checkpoint orchestration is local.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/barlow_twins/models.py"
+      ],
+      "source_key": "barlowtwins",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/barlowtwins/blob/8e8d284ca0bc02f88b92328e53f9b901e86b4a3c/main.py"
+      ],
+      "covered_portions": "MIT; applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "Local declared source; projector construction, cross-correlation loss and off_diagonal copied/adapted; local checkpoint/load/eval wrappers.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/vicreg/models.py"
+      ],
+      "source_key": "vicreg",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/vicreg/blob/4e12602fd495af83efd1631fbe82523e6db092e0/resnet.py"
+      ],
+      "covered_portions": "MIT; applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "Local declared source and retained header; 257 of 334 nonblank lines match, including 121 consecutive lines.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": [
+        "torchvision"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/full_gather_layer.py"
+      ],
+      "source_key": "vicreg",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/vicreg/blob/4e12602fd495af83efd1631fbe82523e6db092e0/main_vicreg.py"
+      ],
+      "covered_portions": "MIT; applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "Local declared source; FullGatherLayer identical except whitespace. Original file import was in May 2026, after MIT relicensing.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/vicreg/VICReg.py"
+      ],
+      "source_key": "vicreg",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/vicreg/blob/4e12602fd495af83efd1631fbe82523e6db092e0/main_vicreg.py"
+      ],
+      "covered_portions": "MIT for adapted loss portions; applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "Loss computation closely follows class VICReg forward; local trainer framework elsewhere.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/simsiam/models.py"
+      ],
+      "source_key": "simsiam",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/simsiam/blob/a7bc1772896d0dad0806c51f0bb6f3b16d290468/simsiam/builder.py"
+      ],
+      "covered_portions": "CC-BY-NC-4.0; applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "Local declared source and retained header; 49 of 100 nonblank lines matching. Encoder/projector/predictor and stop-gradient forward adapted; local checkpoint/eval wrappers.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/mocov1/models.py",
+        "src/methods/mocov2/models.py"
+      ],
+      "source_key": "moco",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/moco/blob/7397dfe146c7ca6bbb58e9c382498069178ba764/moco/builder.py"
+      ],
+      "covered_portions": "MIT (official relicensing 2023-01-18); applies to the upstream-derived portions, not an automatic grant for unrelated project code.",
+      "provenance_evidence": "Local says Gitee mirror; algorithmic core matches official builder at MIT relicensing snapshot (99 of 235 nonblank lines for MoCov1), with local checkpoint/helpers/eval extensions. Files differ only default mlp False/True.",
+      "local_modifications": "Local model/configuration/loading/evaluation or training integration; original notices retained.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/schedulers.py"
+      ],
+      "source_key": "ijepa",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/ijepa/blob/52c1ae95d05f743e000e8f10a1f3a79b10cff048/src/utils/schedulers.py"
+      ],
+      "covered_portions": "WarmupCosineSchedule and CosineWDSchedule derivations; later project-specific schedules/helpers are not automatically relicensed.",
+      "provenance_evidence": "Initial local commit 56519d4 explicitly attributed I-JEPA; notice later removed. Current implementation retains the adapted cosine schedules.",
+      "local_modifications": "Expanded scheduling/state interfaces, parameter-group filters, clamping and additional local schedules.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/lars.py"
+      ],
+      "source_key": "mae",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/mae/blob/efb2a8062c206524e35e47d04501ed4f544c0ae8/util/lars.py"
+      ],
+      "covered_portions": "MAE/MoCo v3-derived LARS update implementation.",
+      "provenance_evidence": "Local historical commits 8e22a75 and 8d4d2e1 explicitly attributed MAE; update structure preserved in current code.",
+      "local_modifications": "Parameter-group controls, bias/norm decay/adaptation, clipping, epsilon and optimizer-state handling.",
+      "additional_license_keys": [
+        "moco_v3"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/utils.py"
+      ],
+      "source_key": "ijepa",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/ijepa/blob/52c1ae95d05f743e000e8f10a1f3a79b10cff048/src/utils/tensors.py"
+      ],
+      "covered_portions": "repeat_interleave_batch only; exact immediate copying route remains unconfirmed.",
+      "provenance_evidence": "AST-identical matching function; added in local commit 82a8be46 without a source notice. Conservative attribution, not proof of all-file derivation.",
+      "local_modifications": "No substantive difference found for the matching function; unrelated logging/parameter helpers are outside this attribution.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/utils.py"
+      ],
+      "source_key": "msn",
+      "upstream_source_urls": [
+        "https://github.com/facebookresearch/msn/blob/4388dc1eadbe3042b85d3296d41b9b207656e043/src/utils.py"
+      ],
+      "covered_portions": "AllReduceSum only; also matches I-JEPA distributed helper.",
+      "provenance_evidence": "AST-identical helper added in local MSN commit 2dd8d3aa and used by MSN.",
+      "local_modifications": "Local class name/integration; retained distributed availability/world-size guards.",
+      "additional_license_keys": [
+        "ijepa"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/utils.py"
+      ],
+      "source_key": "pytorch",
+      "upstream_source_urls": [
+        "https://github.com/pytorch/pytorch/blob/0398ae1ef13f587e49d96aece24d334d88f562a7/torch/nn/init.py"
+      ],
+      "covered_portions": "_no_grad_trunc_normal_ and trunc_normal_ only; possible timm/RW intermediary.",
+      "provenance_evidence": "Local Cut & paste from PyTorch ... - RW comment; matching initializer. Exact intermediary/version is not established.",
+      "local_modifications": "Local helper layout and variant omitting the out-of-range-mean warning; retain PyTorch notices and timm/RW attribution.",
+      "additional_license_keys": [
+        "timm"
+      ]
+    },
+    {
+      "local_paths": [
+        "src/nt_xent.py"
+      ],
+      "source_key": "bolts",
+      "upstream_source_urls": [
+        "https://github.com/Lightning-Universe/lightning-bolts/blob/34958a8892d42714edf02ba896fd5861ebb3cb7e/src/pl_bolts/losses/self_supervised_learning.py"
+      ],
+      "covered_portions": "Adapted nt_xent_loss similarity/positive/negative calculation.",
+      "provenance_evidence": "Explicit local URL to Lightning Bolts.",
+      "local_modifications": "Local normalization, numerical logsumexp calculation and loss-class interface.",
+      "additional_license_keys": []
+    },
+    {
+      "local_paths": [
+        "src/methods/evaluation/resnet50.py"
+      ],
+      "source_key": "torchvision",
+      "upstream_source_urls": [
+        "https://github.com/pytorch/vision/blob/b68adcf9a9280aef02fc08daed170d74d0892361/torchvision/models/resnet.py"
+      ],
+      "covered_portions": "_forward_impl sequence only, conservatively attributed; torchvision model itself is imported rather than vendored.",
+      "provenance_evidence": "Close matching forward sequence through self.backbone; no explicit copying route in history.",
+      "local_modifications": "Activation checkpointing and local evaluation/loading wrapper.",
+      "additional_license_keys": []
+    }
+  ],
+  "unresolved": [
+    "No explicit license found for ajtejankar/byol-convert; no redistribution permission inferred.",
+    "MSN backbone explicit Apache-2.0 notice differs from CC-BY-NC root license; both preserved.",
+    "Exact copying route for repeat_interleave_batch and truncated-normal intermediary not established.",
+    "No external source identified for NanoPark.py/Hochuli.py; absence of notices does not establish authorship or a license.",
+    "Project-authored contributions have not received a new license in this documentation change."
+  ]
+}

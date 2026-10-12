@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Soumith Chintala 2016,
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: BSD-3-Clause.
+# Full upstream license copy: LICENSES/TorchVision-BSD-3-Clause.txt
+
 import torchvision.models as models
 import torch.utils.checkpoint
 import torch.nn as nn

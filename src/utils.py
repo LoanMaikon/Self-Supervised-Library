@@ -137,6 +137,9 @@ def load_last_values(output_folder, last_epoch, test=False, val=False):
 
     return lr_values, wd_values, ema_values, train_loss
 
+# PyTorch-origin initializer; possible timm/RW intermediary.
+# Full notices: LICENSES/PyTorch-BSD.txt and LICENSES/timm-Apache-2.0.txt.
+# Local adaptation and uncertain copying route: LICENSES/THIRD_PARTY_NOTICES.
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
     # Method based on https://people.sc.fsu.edu/~jburkardt/presentations/truncated_normal.pdf
@@ -174,6 +177,10 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     # type: (torch.Tensor, float, float, float, float) -> torch.Tensor
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
 
+# Matches I-JEPA src/utils/tensors.py; immediate copying route unconfirmed.
+# Upstream matching-portion notice: Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved. Terms: LICENSES/I-JEPA-CC-BY-NC-4.0.txt.
+# Function-level attribution only; see LICENSES/THIRD_PARTY_NOTICES.
 def repeat_interleave_batch(x, B, repeat):
     N = len(x) // B
     x = torch.cat([
@@ -182,6 +189,10 @@ def repeat_interleave_batch(x, B, repeat):
     ], dim=0)
     return x
 
+# Matching MSN helper, incorporated during the local MSN addition.
+# Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
+# Incorporated-source terms: LICENSES/MSN-CC-BY-NC-4.0.txt.
+# Local class/integration adaptations: LICENSES/THIRD_PARTY_NOTICES.
 class AllReduceSum(torch.autograd.Function):
 
     @staticmethod

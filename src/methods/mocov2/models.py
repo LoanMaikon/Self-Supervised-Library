@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Meta Platforms, Inc. and affiliates. Existing local Facebook notices are retained.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: MIT.
+# Full upstream license copy: LICENSES/MoCo-MIT.txt
+
 # Code adapted from https://gitee.com/facebookresearch/moco
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 

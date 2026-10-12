@@ -1,0 +1,65 @@
+Self-Supervised Library - existing license scope
+Audit date: 2026-10-12
+
+This repository contains source from several projects under different
+licenses. This file is an index of existing terms, not a new license grant
+for the repository as a whole. No new license has been selected for
+project-authored code, documentation, configurations, or modifications.
+Those contributions must not be assumed to be licensed under the terms
+of an upstream project solely because they implement the same method.
+
+Existing third-party notices and license terms continue to apply to their
+respective source and adapted portions. The complete upstream license
+texts are preserved, without modification, in LICENSES/. File/function
+scope, attribution, changes, sources, and unresolved provenance are
+documented in LICENSES/THIRD_PARTY_NOTICES. Verification snapshots and
+license checksums are recorded in LICENSES/sources.json.
+
+Principal upstream terms found in incorporated source:
+
+  Apache-2.0:
+    SimCLR converter, DINOv1, DINOv2, iBOT, Lightning Bolts, and timm.
+    MSN's src/deit.py backbone has an explicit Apache-2.0 file notice;
+    MSN's root license and its losses/utilities are CC-BY-NC-4.0.
+
+  MIT:
+    Barlow Twins, VICReg, and the verified relicensed MoCo implementation
+    used as a reference for MoCov1/MoCov2.
+
+  CC-BY-NC-4.0:
+    SwAV, MAE, I-JEPA, SimSiam, MSN losses/utilities, and shared code
+    derived from MAE, I-JEPA, and MoCo v3.
+
+  DINOv3 License Agreement:
+    Incorporated DINOv3 model, loss, and masking/collation source and
+    adaptations. See LICENSES/DINOv3.txt for the complete agreement.
+
+  BSD-style / BSD-3-Clause:
+    Incorporated PyTorch initialization code and inherited torchvision
+    ResNet portions. Imported dependencies also retain their own terms.
+
+Important scope and outstanding issues:
+
+  - All 15 method controllers and the evaluation pipeline use the shared
+    I-JEPA-derived schedulers. CC-BY-NC terms apply to the covered source
+    and adaptations; the complete current workflow cannot be represented
+    as having unrestricted commercial-use permission. An import does not
+    automatically relicense the importing file.
+
+  - src/methods/byol/resnet.py identifies ajtejankar/byol-convert as its
+    source. No explicit license was found in that upstream snapshot.
+    This index does not authorize use or redistribution of portions for
+    which permission has not been established. The license of the
+    original BYOL research implementation does not resolve this gap.
+
+  - Some files contain both project-specific and third-party portions.
+    See the function-level scope in LICENSES/THIRD_PARTY_NOTICES; no
+    blanket license is assigned to those mixed files by this index.
+
+  - This source-code audit does not grant rights to ImageNet, separately
+    downloaded model weights, or other external assets. Their respective
+    terms must be checked separately.
+
+The upstream license texts govern their covered materials. This index
+does not replace their conditions, cure missing permission, or certify
+that the entire repository is fully licensed for a particular use.

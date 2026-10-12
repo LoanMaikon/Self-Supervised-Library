@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: Apache-2.0.
+# Full upstream license copy: LICENSES/DINO-Apache-2.0.txt
+
 # Code from https://github.com/facebookresearch/dino/blob/main/vision_transformer.py
 
 # Copyright (c) Facebook, Inc. and its affiliates.

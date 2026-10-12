@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Facebook, Inc. and its affiliates.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: MIT.
+# Full upstream license copy: LICENSES/BarlowTwins-MIT.txt
+
 # Code from https://github.com/facebookresearch/barlowtwins/blob/main/main.py
 
 import torch.nn as nn

@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: CC-BY-NC-4.0 (root; backbone file has Apache-2.0 notice).
+# Full upstream license copy: LICENSES/MSN-CC-BY-NC-4.0.txt
+
 # Code from https://github.com/facebookresearch/msn/blob/main/src/losses.py
 
 # Copyright (c) Facebook, Inc. and its affiliates.

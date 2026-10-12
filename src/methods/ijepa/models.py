@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: CC-BY-NC-4.0.
+# Full upstream license copy: LICENSES/I-JEPA-CC-BY-NC-4.0.txt
+
 # Using as base https://github.com/facebookresearch/ijepa/blob/main/src/models/vision_transformer.py
 
 import torch.nn.functional as F

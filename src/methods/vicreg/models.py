@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Facebook, Inc. and its affiliates. / Copyright (c) Meta Platforms, Inc. and affiliates. in main_vicreg.py
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: MIT.
+# Full upstream license copy: LICENSES/VICReg-MIT.txt
+
 # Code from https://github.com/facebookresearch/vicreg/blob/main/resnet.py
 
 # Copyright (c) Facebook, Inc. and its affiliates.

@@ -1,3 +1,9 @@
+# Incorporated third-party source; local adaptations for Self-Supervised Library.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Source scope, attribution and modifications: LICENSES/THIRD_PARTY_NOTICES.
+# Incorporated-source terms: DINOv3 License Agreement, last updated August 19, 2025.
+# Full upstream license copy: LICENSES/DINOv3.txt
+
 # https://github.com/facebookresearch/dinov3/blob/main/dinov3/loss/ibot_patch_loss.py
 
 # Copyright (c) Meta Platforms, Inc. and affiliates.

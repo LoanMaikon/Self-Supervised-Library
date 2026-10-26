@@ -297,17 +297,17 @@ class IJEPA():
     def _load_models(self):
         match self.meta_model_name:
             case "vit_tiny":
-                self.encoder = vit_tiny(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint)
+                self.encoder = vit_tiny(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint, image_size=self.data_crop_size)
             case "vit_small":
-                self.encoder = vit_small(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint)
+                self.encoder = vit_small(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint, image_size=self.data_crop_size)
             case "vit_base":
-                self.encoder = vit_base(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint)
+                self.encoder = vit_base(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint, image_size=self.data_crop_size)
             case "vit_large":
-                self.encoder = vit_large(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint)
+                self.encoder = vit_large(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint, image_size=self.data_crop_size)
             case "vit_huge":
-                self.encoder = vit_huge(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint)
+                self.encoder = vit_huge(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint, image_size=self.data_crop_size)
             case "vit_giant":
-                self.encoder = vit_giant(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint)
+                self.encoder = vit_giant(patch_size=self.mask_patch_size, checkpoint=self.meta_checkpoint, image_size=self.data_crop_size)
         
         self.predictor = vit_predictor(num_patches=self.encoder.get_num_patches(),
                                        embed_dim=self.encoder.get_embed_dim(),

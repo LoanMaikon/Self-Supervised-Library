@@ -418,8 +418,12 @@ class DINOv1():
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
             self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
+            self.target_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_projection_head)
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
+            for target in (self.target_encoder, self.target_projection_head):
+                for value in target.state_dict().values():
+                    torch.distributed.broadcast(value, src=0)
         
         self.encoder.train()
         self.projection_head.train()

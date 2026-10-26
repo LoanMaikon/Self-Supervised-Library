@@ -1103,7 +1103,8 @@ class DINOHead(nn.Module):
 
     def cancel_gradients_last_layer(self, epoch, freeze_last_layer_epochs):
         if epoch <= freeze_last_layer_epochs:
-            self.last_layer.weight_g.grad = None
+            for param in self.last_layer.parameters():
+                param.grad = None
 
 def _build_mlp(nlayers, in_dim, bottleneck_dim, hidden_dim=None, use_bn=False, bias=True):
     if nlayers == 1:

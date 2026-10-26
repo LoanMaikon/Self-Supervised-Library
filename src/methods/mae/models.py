@@ -270,22 +270,14 @@ class MaskedAutoencoderViT(nn.Module):
             param.requires_grad = False
 
     def unfreeze(self):
-        for param in self.parameters():
-            param.requires_grad = True
-
-        # Freezing decoder
-        for param in self.decoder_embed.parameters():
-            param.requires_grad = False
-        for param in self.decoder_blocks.parameters():
-            param.requires_grad = False
-        for param in self.decoder_norm.parameters():
-            param.requires_grad = False
-        for param in self.decoder_pred.parameters():
-            param.requires_grad = False
+        for name, param in self.named_parameters():
+            param.requires_grad = not (
+                name.startswith("decoder_") or name == "mask_token"
+            )
     
     def unfreeze_all(self):
-        for param in self.parameters():
-            param.requires_grad = True
+        for name, param in self.named_parameters():
+            param.requires_grad = name not in {"pos_embed", "decoder_pos_embed"}
     
     def get_output_dim(self):
         return self.cls_token.shape[-1]

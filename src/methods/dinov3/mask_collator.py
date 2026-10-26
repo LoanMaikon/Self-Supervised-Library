@@ -142,15 +142,21 @@ def collate_data_and_cast(
         if n_global_crops is None or n_local_crops is None:
             raise ValueError("n_global_crops and n_local_crops are required for legacy list samples")
         views0 = list(first_views)
+        paired_global_crops = isinstance(views0[0], (tuple, list))
         if n_gram_crops is None:
             n_gram_crops = max(0, len(views0) - n_global_crops - n_local_crops)
         collated_global_crops = torch.stack(
-            [_unwrap_sample(s)[i] for i in range(n_global_crops) for s in samples_list]
+            [(_unwrap_sample(s)[i][0] if paired_global_crops else _unwrap_sample(s)[i])
+             for i in range(n_global_crops) for s in samples_list]
         )
         collated_local_crops = torch.stack(
             [_unwrap_sample(s)[n_global_crops + i] for i in range(n_local_crops) for s in samples_list]
         )
-        if n_gram_crops and len(views0) >= n_global_crops + n_local_crops + n_gram_crops:
+        if paired_global_crops:
+            collated_gram_teacher_crops = torch.stack(
+                [_unwrap_sample(s)[i][1] for i in range(n_global_crops) for s in samples_list]
+            )
+        elif n_gram_crops and len(views0) >= n_global_crops + n_local_crops + n_gram_crops:
             start = n_global_crops + n_local_crops
             collated_gram_teacher_crops = torch.stack(
                 [_unwrap_sample(s)[start + i] for i in range(n_gram_crops) for s in samples_list]

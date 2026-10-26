@@ -204,7 +204,7 @@ class BarlowTwins():
 
     def _load_transform(self):
         def __get_color_distortion(strength=1.0):
-            collor_jitter = v2.ColorJitter(0.8 * strength, 0.8 * strength, 0.8 * strength, 0.2 * strength)
+            collor_jitter = v2.ColorJitter(0.4 * strength, 0.4 * strength, 0.2 * strength, 0.1 * strength)
             rnd_color_jitter = v2.RandomApply([collor_jitter], p=0.8)
             rnd_gray = v2.RandomGrayscale(p=0.2)
 
@@ -214,7 +214,7 @@ class BarlowTwins():
             v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=Image.BICUBIC),
             v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
             __get_color_distortion(self.data_color_jitter) if self.data_color_jitter else v2.Identity(),
-            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.9) if self.data_gaussian_blur else v2.Identity(),
+            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=1.0) if self.data_gaussian_blur else v2.Identity(),
             v2.RandomSolarize(threshold=128, p=0.0) if self.data_solarization else v2.Identity(),
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),

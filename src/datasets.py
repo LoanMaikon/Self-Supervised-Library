@@ -51,9 +51,9 @@ class datasets(Dataset):
                 class_to_id = {cls: idx for idx, cls in enumerate(classes)}
 
                 train_images_per_class = {}
-                train_wnid = os.listdir(self.datasets_folder_path + self.dataset_name + "/train/")
+                train_wnid = sorted(os.listdir(self.datasets_folder_path + self.dataset_name + "/train/"))
                 for wnid in train_wnid:
-                    _images = glob(self.datasets_folder_path + self.dataset_name + "/train/" + wnid + "/*.JPEG")
+                    _images = sorted(glob(self.datasets_folder_path + self.dataset_name + "/train/" + wnid + "/*.JPEG"))
                     train_images_per_class[wnid] = _images
 
                 if self.separate_val_subset:
@@ -61,9 +61,10 @@ class datasets(Dataset):
 
                     for wnid, _images in train_images_per_class.items():
                         n_val_images = ceil(len(_images) * self.val_size)
+                        split_at = len(_images) - n_val_images
 
-                        val_images_per_class[wnid] = _images[-n_val_images:]
-                        train_images_per_class[wnid] = _images[:-n_val_images]
+                        val_images_per_class[wnid] = _images[split_at:]
+                        train_images_per_class[wnid] = _images[:split_at]
 
                 match self.operation:
                     case "train":

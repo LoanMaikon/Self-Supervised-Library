@@ -10,6 +10,9 @@ def _clamp(value, low=0.0, high=1.0):
     return max(low, min(high, value))
 
 def group_uses_weight_decay(group):
+    if group.get("weight_decay_exclude", False):
+        return False
+
     is_bias = group.get("is_bias", False)
     is_norm = group.get("is_norm", False)
 

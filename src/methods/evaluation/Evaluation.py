@@ -34,6 +34,14 @@ from .linear_head import LinearHead
 from src.datasets import datasets
 from src.lars import LARS
 
+class _EvaluationEncoder(torch.nn.Module):
+    def __init__(self, encoder):
+        super().__init__()
+        self.encoder = encoder
+
+    def forward(self, images):
+        return self.encoder.eval_forward(images)
+
 class Evaluation():
     def __init__(self,
                  opened_config,
@@ -114,7 +122,7 @@ class Evaluation():
                         with torch.no_grad():
                             features = self.encoder.eval_forward(images)
                     else:
-                        features = self.encoder.eval_forward(images)
+                        features = self.encoder(images) if self.world_size > 1 else self.encoder.eval_forward(images)
                     output = self.linear_head(features)
                     loss = self.apply_criterion(output, labels)
 
@@ -147,6 +155,8 @@ class Evaluation():
 
                 self.encoder.eval()
                 self.linear_head.eval()
+                encoder = self.encoder.module.encoder if isinstance(self.encoder, DDP) else self.encoder
+                linear_head = self.linear_head.module if isinstance(self.linear_head, DDP) else self.linear_head
 
                 num_samples = 0
 
@@ -155,8 +165,8 @@ class Evaluation():
                         images = images[0].to(self.device, non_blocking=True)
                         labels = labels.to(self.device, non_blocking=True)
 
-                        features = self.encoder.eval_forward(images)
-                        output = self.linear_head(features)
+                        features = encoder.eval_forward(images)
+                        output = linear_head(features)
 
                         loss = self.apply_criterion(output, labels)
                         
@@ -218,6 +228,9 @@ class Evaluation():
 
         self.encoder.eval()
         self.linear_head.eval()
+        # Evaluation shards may have different lengths; avoid DDP forward collectives.
+        encoder = self.encoder.module.encoder if isinstance(self.encoder, DDP) else self.encoder
+        linear_head = self.linear_head.module if isinstance(self.linear_head, DDP) else self.linear_head
 
         num_samples = 0
 
@@ -230,8 +243,8 @@ class Evaluation():
                 images = images[0].to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
-                features = self.encoder.eval_forward(images)
-                output = self.linear_head(features)
+                features = encoder.eval_forward(images)
+                output = linear_head(features)
 
                 loss = self.apply_criterion(output, labels)
                 
@@ -266,7 +279,7 @@ class Evaluation():
     
         os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
 
-        encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 and self.meta_mode == "fine_tuning" else self.encoder.state_dict()
+        encoder_state_dict = self.encoder.module.encoder.state_dict() if self.world_size > 1 and self.meta_mode == "fine_tuning" else self.encoder.state_dict()
         linear_head_state_dict = self.linear_head.module.state_dict() if self.world_size > 1 else self.linear_head.state_dict()
         optimizer_state_dict = self.optimizer.state_dict()
         lr_scheduler_state_dict = self.lr_scheduler.state_dict()
@@ -991,7 +1004,8 @@ class Evaluation():
         if self.world_size > 1:
             if self.meta_mode != "linear_eval":
                 self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
-                self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+                # Route feature extraction through DDP so its gradient reducer runs.
+                self.encoder = DDP(_EvaluationEncoder(self.encoder), device_ids=[self.rank], output_device=self.rank, find_unused_parameters=True)
 
             self.linear_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.linear_head)
             self.linear_head = DDP(self.linear_head, device_ids=[self.rank], output_device=self.rank)
@@ -1120,7 +1134,7 @@ class Evaluation():
         )
     
     def has_val(self):
-        return self.data_separate_val_subset_use
+        return self.data_separate_val_subset_use and self.data_separate_val_subset_size > 0
 
     def _load_criterion(self):
         match self.optimization_criterion:

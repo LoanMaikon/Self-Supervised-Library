@@ -361,12 +361,18 @@ class iBOTHead(DINOHead):
 
             self.last_norm2 = self.last_norm
 
+    def freeze_last_layer(self):
+        super().freeze_last_layer()
+        if self.norm_last_layer and self.last_layer2 is not None:
+            self.last_layer2.weight_g.requires_grad = False
+
     def forward(self, x):
         if len(x.shape) == 2:
             return super(iBOTHead, self).forward(x)
 
         if self.last_layer is not None:
-            x = self.mlp(x)
+            batch_size, n_tokens = x.shape[:2]
+            x = self.mlp(x.flatten(0, 1)).reshape(batch_size, n_tokens, -1)
             x = nn.functional.normalize(x, dim=-1, p=2)
             x1 = self.last_layer(x[:, 0])
             x2 = self.last_layer2(x[:, 1:])
@@ -383,21 +389,21 @@ class iBOTHead(DINOHead):
 
 def vit_tiny(patch_size, use_checkpoint, drop_path_rate):
     return VisionTransformer(
-        patch_size=patch_size, embed_dim=192, depth=12, num_heads=3, use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
+        patch_size=patch_size, embed_dim=192, depth=12, num_heads=3, qkv_bias=True, use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
 
 def vit_small(patch_size, use_checkpoint, drop_path_rate):
     return VisionTransformer(
-        patch_size=patch_size, embed_dim=384, depth=12, num_heads=6, use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
+        patch_size=patch_size, embed_dim=384, depth=12, num_heads=6, qkv_bias=True, use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
 
 def vit_base(patch_size, use_checkpoint, drop_path_rate):
     return VisionTransformer(
-        patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
+        patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, qkv_bias=True, use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
 
 def vit_large(patch_size, use_checkpoint, drop_path_rate):
     return VisionTransformer(
-        patch_size=patch_size, embed_dim=1024, depth=24, num_heads=16, use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
+        patch_size=patch_size, embed_dim=1024, depth=24, num_heads=16, qkv_bias=True, use_checkpoint=use_checkpoint, drop_path_rate=drop_path_rate)
 
-def projection_head(in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256, use_checkpoint=False):
+def projection_head(in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256, use_checkpoint=False, shared_head=False):
     return iBOTHead(
         in_dim=in_dim,
         out_dim=out_dim,
@@ -408,4 +414,5 @@ def projection_head(in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers
         hidden_dim=hidden_dim,
         bottleneck_dim=bottleneck_dim,
         use_checkpoint=use_checkpoint,
+        shared_head=shared_head,
     )

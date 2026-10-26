@@ -14,6 +14,7 @@
 
 import torch
 import torch.nn as nn
+import torch.utils.checkpoint
 import torchvision.models as models
 
 
@@ -34,6 +35,7 @@ class SimSiam(nn.Module):
 
         # build a 3-layer projector
         prev_dim = self.encoder.fc.weight.shape[1]
+        self.eval_out_dim = prev_dim
         self.encoder.fc = nn.Sequential(nn.Linear(prev_dim, prev_dim, bias=False),
                                         nn.BatchNorm1d(prev_dim),
                                         nn.ReLU(inplace=True), # first layer
@@ -73,11 +75,11 @@ class SimSiam(nn.Module):
         
         else:
             # compute features for one view
-            z1 = torch.utils.checkpoint.checkpoint(self.encoder, x1) # NxC
-            z2 = torch.utils.checkpoint.checkpoint(self.encoder, x2) # NxC
+            z1 = torch.utils.checkpoint.checkpoint(self.encoder, x1, use_reentrant=False) # NxC
+            z2 = torch.utils.checkpoint.checkpoint(self.encoder, x2, use_reentrant=False) # NxC
 
-            p1 = torch.utils.checkpoint.checkpoint(self.predictor, z1) # NxC
-            p2 = torch.utils.checkpoint.checkpoint(self.predictor, z2) # NxC
+            p1 = torch.utils.checkpoint.checkpoint(self.predictor, z1, use_reentrant=False) # NxC
+            p2 = torch.utils.checkpoint.checkpoint(self.predictor, z2, use_reentrant=False) # NxC
 
         return p1, p2, z1.detach(), z2.detach()
 
@@ -95,6 +97,8 @@ class SimSiam(nn.Module):
     def unfreeze(self):
         for param in self.parameters():
             param.requires_grad = True
+        if isinstance(self.encoder.fc, nn.Sequential):
+            self.encoder.fc[6].bias.requires_grad = False
 
     def get_features(self, features):
         return features
@@ -129,7 +133,7 @@ class SimSiam(nn.Module):
         return self.encoder(x)
 
     def get_eval_output_dim(self):
-        return self.out_dim
+        return self.eval_out_dim
     
 def resnet50(dim=2048, pred_dim=512, use_checkpoint=False):
     return SimSiam(models.resnet50, dim=dim, pred_dim=pred_dim, use_checkpoint=use_checkpoint)

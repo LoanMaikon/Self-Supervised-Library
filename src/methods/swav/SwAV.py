@@ -181,11 +181,16 @@ class SwAV():
         return loss
 
     def save_models(self, epoch):
+        os.makedirs(os.path.join(self.output_folder, "queue"), exist_ok=True)
+        queue_name = f"queue_rank_{torch.distributed.get_rank()}" if self.world_size > 1 else "queue"
+        torch.save(self.queue, os.path.join(self.output_folder, "queue", f"{queue_name}.pth"))
+        if self.meta_save_every > 0 and epoch % self.meta_save_every == 0:
+            torch.save(self.queue, os.path.join(self.output_folder, "queue", f"{queue_name}_epoch_{epoch}.pth"))
+
         if not is_main_process():
             return
     
         os.makedirs(os.path.join(self.output_folder, "models"), exist_ok=True)
-        os.makedirs(os.path.join(self.output_folder, "queue"), exist_ok=True)
 
         encoder_state_dict = self.encoder.module.state_dict() if self.world_size > 1 else self.encoder.state_dict()
         projection_head_state_dict = self.projection_head.module.state_dict() if self.world_size > 1 else self.projection_head.state_dict()
@@ -198,7 +203,6 @@ class SwAV():
         torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", "encoder.pth"))
         torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", "projection_head.pth"))
         torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", "prototypes.pth"))
-        torch.save(self.queue, os.path.join(self.output_folder, "queue", "queue.pth"))
         torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", "optimizer.pth"))
         torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", "lr_scheduler.pth"))
         torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", "wd_scheduler.pth"))
@@ -208,7 +212,6 @@ class SwAV():
             torch.save(encoder_state_dict, os.path.join(self.output_folder, "models", f"encoder_epoch_{epoch}.pth"))
             torch.save(projection_head_state_dict, os.path.join(self.output_folder, "models", f"projection_head_epoch_{epoch}.pth"))
             torch.save(prototypes_state_dict, os.path.join(self.output_folder, "models", f"prototypes_epoch_{epoch}.pth"))
-            torch.save(self.queue, os.path.join(self.output_folder, "queue", f"queue_epoch_{epoch}.pth"))
             torch.save(optimizer_state_dict, os.path.join(self.output_folder, "models", f"optimizer_epoch_{epoch}.pth"))
             torch.save(lr_scheduler_state_dict, os.path.join(self.output_folder, "models", f"lr_scheduler_epoch_{epoch}.pth"))
             torch.save(wd_scheduler_state_dict, os.path.join(self.output_folder, "models", f"wd_scheduler_epoch_{epoch}.pth"))
@@ -222,7 +225,10 @@ class SwAV():
         if self.optimization_queue_length <= 0 or self.last_epoch < self.optimization_queue_start_epoch:
             return
 
-        queue_path = os.path.join(self.output_folder, "queue", f"queue.pth")
+        queue_name = f"queue_rank_{torch.distributed.get_rank()}" if self.world_size > 1 else "queue"
+        queue_path = os.path.join(self.output_folder, "queue", f"{queue_name}.pth")
+        if not os.path.exists(queue_path):
+            queue_path = os.path.join(self.output_folder, "queue", "queue.pth")
         if not os.path.exists(queue_path):
             raise FileNotFoundError(f"Queue file not found at {queue_path} for loading queue from last epoch.")
     
@@ -332,7 +338,7 @@ class SwAV():
             v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip() if self.data_global_views_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_global_views_color_jitter else v2.Identity(),
-            v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1)], p=0.5) if self.data_global_views_gaussian_blur else v2.Identity(),
+            v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_global_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.5) if self.data_global_views_gaussian_blur else v2.Identity(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)
         ])
@@ -341,7 +347,7 @@ class SwAV():
             v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip() if self.data_local_views_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_local_views_color_jitter else v2.Identity(),
-            v2.GaussianBlur(kernel_size=int(0.1 * self.data_local_views_crop_size) * 2 + 1) if self.data_local_views_gaussian_blur else v2.Identity(),
+            v2.RandomApply([v2.GaussianBlur(kernel_size=int(0.1 * self.data_local_views_crop_size) * 2 + 1, sigma=(0.1, 2.0))], p=0.5) if self.data_local_views_gaussian_blur else v2.Identity(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std)
         ])

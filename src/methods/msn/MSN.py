@@ -1,6 +1,7 @@
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import v2
+import torch.distributed as dist
 import torch.optim as optim
 import torch.nn as nn
 import numpy as np
@@ -9,7 +10,7 @@ import os
 
 from src.utils import write_on_log, plot_fig, write_on_csv, save_json, is_main_process, \
     recreate_csv_log, get_last_epoch, load_last_values, AllReduceSum, make_param_groups
-from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMACosineSchedule, \
+from src.schedulers import WarmupCosineSchedule, CosineWDSchedule, EMALinearSchedule, \
     LinearWarmupTemperatureSchedule
 from src.datasets import datasets
 from .models import deit_tiny, deit_small, deit_small_p8, deit_small_p7, vitc_4gf, deit_small_convstem, \
@@ -230,6 +231,8 @@ class MSN():
         )
         _sqrt_k = (1. / self.meta_projection_head_output_dim) ** 0.5
         torch.nn.init.uniform_(prototypes, -_sqrt_k, _sqrt_k)
+        if self.world_size > 1:
+            dist.broadcast(prototypes, src=0)
 
         self.prototypes = torch.nn.Parameter(prototypes) 
 
@@ -250,7 +253,7 @@ class MSN():
             T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
         )
 
-        self.ema_scheduler = EMACosineSchedule(
+        self.ema_scheduler = EMALinearSchedule(
             start_ema=self.optimization_ema[0],
             final_ema=self.optimization_ema[1],
             T_max=self.optimization_num_epochs * len(self.train_dataloader) * self.optimization_ipe_scale,
@@ -287,7 +290,8 @@ class MSN():
                             "params": [self.prototypes],
                             "lr": self.optimization_lr[1],
                             "initial_lr": self.optimization_lr[1],
-                            "weight_decay": self.optimization_weight_decay[0],
+                            "weight_decay": 0.0,
+                            "weight_decay_exclude": True,
                             "is_bias": False,
                             "is_norm": False,
                             "decay_bias": self.optimization_decay_bias,
@@ -362,26 +366,30 @@ class MSN():
         ])
 
     def _load_models(self):
+        head_kwargs = {
+            "hidden_dim": self.meta_projection_head_hidden_dim,
+            "output_dim": self.meta_projection_head_output_dim,
+        }
         match self.meta_model_name:
             case "vit_tiny":
-                self.encoder = deit_tiny(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = deit_tiny(patch_size=self.meta_patch_size)
+                self.encoder = deit_tiny(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint, **head_kwargs)
+                self.target_encoder = deit_tiny(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, **head_kwargs)
             
             case "vit_small":
-                self.encoder = deit_small(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = deit_small(patch_size=self.meta_patch_size)
+                self.encoder = deit_small(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint, **head_kwargs)
+                self.target_encoder = deit_small(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, **head_kwargs)
 
             case "vit_base":
-                self.encoder = deit_base(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = deit_base(patch_size=self.meta_patch_size)
+                self.encoder = deit_base(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint, **head_kwargs)
+                self.target_encoder = deit_base(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, **head_kwargs)
             
             case "vit_large":
-                self.encoder = deit_large(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = deit_large(patch_size=self.meta_patch_size)
+                self.encoder = deit_large(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint, **head_kwargs)
+                self.target_encoder = deit_large(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, **head_kwargs)
 
             case "vit_huge":
-                self.encoder = deit_huge(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint)
-                self.target_encoder = deit_huge(patch_size=self.meta_patch_size)
+                self.encoder = deit_huge(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, use_checkpoint=self.meta_checkpoint, **head_kwargs)
+                self.target_encoder = deit_huge(patch_size=self.meta_patch_size, drop_path_rate=self.optimization_drop_path_rate, **head_kwargs)
 
         if self.meta_pretrained_weights is not None:
             if os.path.exists(self.meta_pretrained_weights):
@@ -409,8 +417,14 @@ class MSN():
 
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
+            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
 
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
+            with torch.no_grad():
+                for param in self.target_encoder.parameters():
+                    dist.broadcast(param, src=0)
+                for buffer in self.target_encoder.buffers():
+                    dist.broadcast(buffer, src=0)
         
         self.encoder.train()
         self.target_encoder.train()

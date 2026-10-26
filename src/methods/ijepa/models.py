@@ -300,8 +300,8 @@ class VisionTransformer(nn.Module):
             param.requires_grad = False
 
     def unfreeze(self):
-        for param in self.parameters():
-            param.requires_grad = True
+        for name, param in self.named_parameters():
+            param.requires_grad = name != "pos_embed"
 
     def forward(self, x, masks=None):
         if masks is not None:
@@ -463,8 +463,8 @@ class VisionTransformerPredictor(nn.Module):
             param.requires_grad = False
     
     def unfreeze(self):
-        for param in self.parameters():
-            param.requires_grad = True
+        for name, param in self.named_parameters():
+            param.requires_grad = name != "pos_embed"
 
     """
     x = output of the encoder for the context tokens (shape: [B, n_keep, D])
@@ -521,20 +521,20 @@ def vit_predictor(num_patches, embed_dim, depth, predictor_embed_dim, num_heads,
                                       predictor_embed_dim=predictor_embed_dim, num_heads=num_heads, 
                                       checkpoint=checkpoint)
 
-def vit_tiny(patch_size, checkpoint):
-    return VisionTransformer(embed_dim=192, depth=12, num_heads=3, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint)
+def vit_tiny(patch_size, checkpoint, image_size=224):
+    return VisionTransformer(embed_dim=192, depth=12, num_heads=3, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint, image_size=image_size)
 
-def vit_small(patch_size, checkpoint):
-    return VisionTransformer(embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint)
+def vit_small(patch_size, checkpoint, image_size=224):
+    return VisionTransformer(embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint, image_size=image_size)
 
-def vit_base(patch_size, checkpoint):
-    return VisionTransformer(embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint)
+def vit_base(patch_size, checkpoint, image_size=224):
+    return VisionTransformer(embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint, image_size=image_size)
 
-def vit_large(patch_size, checkpoint):
-    return VisionTransformer(embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint)
+def vit_large(patch_size, checkpoint, image_size=224):
+    return VisionTransformer(embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint, image_size=image_size)
 
-def vit_huge(patch_size, checkpoint):
-    return VisionTransformer(embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint)
+def vit_huge(patch_size, checkpoint, image_size=224):
+    return VisionTransformer(embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4, patch_size=patch_size, checkpoint=checkpoint, image_size=image_size)
 
-def vit_giant(patch_size, checkpoint):
-    return VisionTransformer(embed_dim=1408, depth=40, num_heads=16, mlp_ratio=48/11, patch_size=patch_size, checkpoint=checkpoint)
+def vit_giant(patch_size, checkpoint, image_size=224):
+    return VisionTransformer(embed_dim=1408, depth=40, num_heads=16, mlp_ratio=48/11, patch_size=patch_size, checkpoint=checkpoint, image_size=image_size)

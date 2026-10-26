@@ -19,6 +19,17 @@ from .gram_loss import GramLoss
 from .ibot_patch_loss import iBOTPatchLoss
 from .koleo_loss import KoLeoLoss
 
+class GlobalCropWithGram:
+    def __init__(self, transform, global_size, gram_size):
+        self.transform = transform
+        self.resize_global = v2.Resize((global_size, global_size), interpolation=v2.InterpolationMode.BICUBIC)
+        self.resize_gram = v2.Resize((gram_size, gram_size), interpolation=v2.InterpolationMode.BICUBIC)
+
+    def __call__(self, image):
+        # Both teachers must see the same spatial crop as the student.
+        crop = self.transform(image)
+        return self.resize_global(crop), self.resize_gram(crop)
+
 class DINOv3():
     def __init__(self,
                  opened_config,
@@ -665,9 +676,6 @@ class DINOv3():
 
         transforms = [self.global_transform_1, self.global_transform_2, self.local_transform]
         times = [1, 1, self.data_local_views_num]
-        if self.gram_use_loss and not self.gram_ema_teacher:
-            transforms.extend([self.gram_transform])
-            times.extend([2])
 
         self.train_dataset = datasets(
             operation="train",
@@ -703,8 +711,12 @@ class DINOv3():
 
             return v2.Compose([rnd_color_jitter, rnd_gray])
     
+        global_crop_size = self.data_global_views_crop_size
+        if self.gram_use_loss and not self.gram_ema_teacher:
+            global_crop_size = max(global_crop_size, self.data_gram_teacher_crops_size)
+
         self.global_transform_1 = v2.Compose([
-            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
+            v2.RandomResizedCrop(global_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
             __get_color_distortion(strength=1.0),
             v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0)),
@@ -713,11 +725,11 @@ class DINOv3():
         ])
 
         self.global_transform_2 = v2.Compose([
-            v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
+            v2.RandomResizedCrop(global_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
-            __get_color_distortion(strength=0.4),
+            __get_color_distortion(strength=1.0),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.1),
-            v2.RandomApply([v2.RandomSolarize(threshold=128)], p=0.2),
+            v2.RandomSolarize(threshold=128, p=0.2),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
@@ -725,18 +737,19 @@ class DINOv3():
         self.local_transform = v2.Compose([
             v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
-            __get_color_distortion(strength=0.4),
+            __get_color_distortion(strength=1.0),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
 
-        self.gram_transform = v2.Compose([
-            v2.RandomResizedCrop(self.data_gram_teacher_crops_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
-            v2.RandomHorizontalFlip(p=0.5),
-            v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
-            v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
-        ])
+        if self.gram_use_loss and not self.gram_ema_teacher:
+            self.global_transform_1 = GlobalCropWithGram(
+                self.global_transform_1, self.data_global_views_crop_size, self.data_gram_teacher_crops_size
+            )
+            self.global_transform_2 = GlobalCropWithGram(
+                self.global_transform_2, self.data_global_views_crop_size, self.data_gram_teacher_crops_size
+            )
 
     def _load_models(self):
         builders = {
@@ -836,15 +849,19 @@ class DINOv3():
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.projection_head_cls = DDP(self.projection_head_cls, device_ids=[self.rank], output_device=self.rank)
             self.projection_head_patch = DDP(self.projection_head_patch, device_ids=[self.rank], output_device=self.rank)
+            for target in (self.target_encoder, self.target_projection_head_cls, self.target_projection_head_patch, self.gram):
+                if target is not None:
+                    for value in target.state_dict().values():
+                        torch.distributed.broadcast(value, src=0)
 
         self.encoder.train()
         self.projection_head_cls.train()
         self.projection_head_patch.train()
-        self.target_encoder.train()
-        self.target_projection_head_cls.train()
-        self.target_projection_head_patch.train()
+        self.target_encoder.eval()
+        self.target_projection_head_cls.eval()
+        self.target_projection_head_patch.eval()
         if self.gram is not None:
-            self.gram.train()
+            self.gram.eval()
 
     def _load_config(self):
         self.data_datasets_path = str(self.config['data']['datasets_path'])

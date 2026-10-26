@@ -217,6 +217,7 @@ class VisionTransformer(nn.Module):
         fc['gelu2'] = torch.nn.GELU()
         fc['fc3'] = torch.nn.Linear(hidden_dim, output_dim)
         self.fc = torch.nn.Sequential(fc)
+        self.fc.apply(self._init_weights)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):

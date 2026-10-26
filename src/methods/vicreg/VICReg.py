@@ -236,8 +236,8 @@ class VICReg():
             dataset_name=self.data_train_dataset,
             separate_val_subset=self.data_separate_val_subset_use,
             val_size=self.data_separate_val_subset_size,
-            transforms=[self.transform],
-            times=[2]
+            transforms=self.transforms,
+            times=[1, 1]
         )
 
         self.train_sampler = DistributedSampler(self.train_dataset, num_replicas=self.world_size, rank=self.rank, shuffle=True)
@@ -261,16 +261,18 @@ class VICReg():
 
             return v2.Compose([rnd_color_jitter, rnd_gray])
 
-        self.transform = v2.Compose([
-            v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC),
-            v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
-            __get_color_distortion() if self.data_color_jitter else v2.Identity(),
-            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5) if self.data_gaussian_blur else v2.Identity(),
-            v2.RandomSolarize(p=0.1, threshold=128) if self.data_solarization else v2.Identity(),
-            v2.ToImage(),
-            v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
-        ])
+        self.transforms = []
+        for blur_probability, solarize_probability in ((1.0, 0.0), (0.1, 0.2)):
+            self.transforms.append(v2.Compose([
+                v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC),
+                v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
+                __get_color_distortion() if self.data_color_jitter else v2.Identity(),
+                v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=blur_probability) if self.data_gaussian_blur else v2.Identity(),
+                v2.RandomSolarize(p=solarize_probability, threshold=128) if self.data_solarization else v2.Identity(),
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
+            ]))
 
     def _load_models(self):
         match self.meta_model_name:
@@ -312,10 +314,10 @@ class VICReg():
                     weight_path=os.path.join(self.output_folder, "models", "encoder.pth"),
                     device=self.device
                 )
-                self.projection_head.load_weights(
-                    weight_path=os.path.join(self.output_folder, "models", "projection_head.pth"),
-                    device=self.device
-                )
+                self.projection_head.load_state_dict(torch.load(
+                    os.path.join(self.output_folder, "models", "projection_head.pth"),
+                    map_location=self.device,
+                ))
             else:
                 raise FileNotFoundError("Checkpoint files not found for continuing training.")
 

@@ -167,7 +167,6 @@ class SimSiam():
                 model = self.model if self.world_size == 1 else self.model.module
 
                 encoder = model.encoder
-                projection_head = model.fc
                 predictor = model.predictor
 
                 param_groups = []
@@ -185,22 +184,11 @@ class SimSiam():
 
                 param_groups.extend(
                     make_param_groups(
-                        model=projection_head,
-                        weight_decay=self.optimization_weight_decay[0],
-                        decay_bias=self.optimization_decay_bias,
-                        decay_norm=self.optimization_decay_norm,
-                        lr=self.optimization_lr[1],
-                        fix_lr=False,
-                    )
-                )
-
-                param_groups.extend(
-                    make_param_groups(
                         model=predictor,
                         weight_decay=self.optimization_weight_decay[0],
                         decay_bias=self.optimization_decay_bias,
                         decay_norm=self.optimization_decay_norm,
-                        lr=self.optimization_lr[2],
+                        lr=self.optimization_lr[1],
                         fix_lr=True,
                     )
                 )

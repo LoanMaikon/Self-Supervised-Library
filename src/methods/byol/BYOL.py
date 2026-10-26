@@ -285,7 +285,7 @@ class BYOL():
     def _load_transform(self):
         # Pseudo code of Apendix A from SimCLR paper
         def __get_color_distortion(strength=1.0):
-            collor_jitter = v2.ColorJitter(0.8 * strength, 0.8 * strength, 0.8 * strength, 0.2 * strength)
+            collor_jitter = v2.ColorJitter(0.4 * strength, 0.4 * strength, 0.2 * strength, 0.1 * strength)
             rnd_color_jitter = v2.RandomApply([collor_jitter], p=0.8)
             rnd_gray = v2.RandomGrayscale(p=0.2)
 
@@ -295,7 +295,7 @@ class BYOL():
             v2.RandomResizedCrop(self.data_crop_size, scale=self.data_crop_scale, ratio=self.data_crop_ratio, interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(0.5) if self.data_horizontal_flip else v2.Identity(),
             __get_color_distortion() if self.data_color_jitter else v2.Identity(),
-            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.9) if self.data_gaussian_blur else v2.Identity(),
+            v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=1.0) if self.data_gaussian_blur else v2.Identity(),
             v2.RandomSolarize(threshold=128, p=0) if self.data_solarization else v2.Identity(),
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
@@ -342,7 +342,7 @@ class BYOL():
             
         self.target_encoder = copy.deepcopy(self.encoder)
         self.target_encoder_projection_head = copy.deepcopy(self.encoder_projection_head)
-        self.target_encoder.checkpoint = False # Target model should not use checkpointing
+        self.target_encoder.use_checkpoint = False # Target model should not use checkpointing
         
         if self.continue_training:
             if os.path.exists(os.path.join(self.output_folder, "models")):
@@ -390,10 +390,16 @@ class BYOL():
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
             self.encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_projection_head)
             self.encoder_prediction_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder_prediction_head)
+            self.target_encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder)
+            self.target_encoder_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_encoder_projection_head)
 
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.encoder_projection_head = DDP(self.encoder_projection_head, device_ids=[self.rank], output_device=self.rank)
             self.encoder_prediction_head = DDP(self.encoder_prediction_head, device_ids=[self.rank], output_device=self.rank)
+
+            if not self.continue_training:
+                self.target_encoder.load_state_dict(self.encoder.module.state_dict())
+                self.target_encoder_projection_head.load_state_dict(self.encoder_projection_head.module.state_dict())
         
         self.encoder.train()
         self.encoder_projection_head.train()

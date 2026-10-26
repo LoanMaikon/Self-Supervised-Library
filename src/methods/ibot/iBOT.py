@@ -166,6 +166,8 @@ class iBOT():
 
                     self.scaler.scale(loss).backward()
 
+                projection_head = self.projection_head.module if self.world_size > 1 else self.projection_head
+                projection_head.cancel_gradients_last_layer(epoch, self.optimization_freeze_last_layer_epochs)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
 
@@ -430,9 +432,9 @@ class iBOT():
         self.global_transform_2 = v2.Compose([
             v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
-            __get_color_distortion(strength=0.4),
+            __get_color_distortion(strength=1.0),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.1),
-            v2.RandomApply([v2.RandomSolarize(threshold=128)], p=0.2),
+            v2.RandomSolarize(threshold=128, p=0.2),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
@@ -440,7 +442,7 @@ class iBOT():
         self.local_transform = v2.Compose([
             v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
-            __get_color_distortion(strength=0.4),
+            __get_color_distortion(strength=1.0),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
@@ -487,6 +489,7 @@ class iBOT():
             norm_last_layer=self.meta_projection_head_norm_last_layer,
             nlayers=self.meta_projection_head_n_layers,
             use_checkpoint=False,
+            shared_head=True,
         )
 
         if self.meta_pretrained_weights is not None:
@@ -525,8 +528,12 @@ class iBOT():
         if self.world_size > 1:
             self.encoder = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.encoder)
             self.projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.projection_head)
+            self.target_projection_head = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.target_projection_head)
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.projection_head = DDP(self.projection_head, device_ids=[self.rank], output_device=self.rank)
+            for target in (self.target_encoder, self.target_projection_head):
+                for value in target.state_dict().values():
+                    dist.broadcast(value, src=0)
         
         self.encoder.train()
         self.projection_head.train()
@@ -586,6 +593,7 @@ class iBOT():
         self.optimization_center_momentum_patch = float(self.config["optimization"]["center_momentum_patch"])
         self.optimization_lambda1 = float(self.config["optimization"]["lambda1"])
         self.optimization_lambda2 = float(self.config["optimization"]["lambda2"])
+        self.optimization_freeze_last_layer_epochs = int(self.config["optimization"].get("freeze_last_layer_epochs", 1))
         self.optimization_decay_bias = bool(self.config["optimization"]["decay_bias"])
         self.optimization_decay_norm = bool(self.config["optimization"]["decay_norm"])
 

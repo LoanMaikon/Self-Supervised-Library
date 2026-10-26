@@ -535,9 +535,9 @@ class DINOv2():
         self.global_transform_2 = v2.Compose([
             v2.RandomResizedCrop(self.data_global_views_crop_size, scale=tuple(self.data_global_views_crop_scale), ratio=tuple(self.data_global_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
-            __get_color_distortion(strength=0.4),
+            __get_color_distortion(strength=1.0),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.1),
-            v2.RandomApply([v2.RandomSolarize(threshold=128)], p=0.2),
+            v2.RandomSolarize(threshold=128, p=0.2),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
         ])
@@ -545,7 +545,7 @@ class DINOv2():
         self.local_transform = v2.Compose([
             v2.RandomResizedCrop(self.data_local_views_crop_size, scale=tuple(self.data_local_views_crop_scale), ratio=tuple(self.data_local_views_crop_ratio), interpolation=v2.InterpolationMode.BICUBIC),
             v2.RandomHorizontalFlip(p=0.5),
-            __get_color_distortion(strength=0.4),
+            __get_color_distortion(strength=1.0),
             v2.RandomApply([v2.GaussianBlur(kernel_size=23, sigma=(0.1, 2.0))], p=0.5),
             v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
             v2.Normalize(mean=self.data_normalize_mean, std=self.data_normalize_std),
@@ -655,13 +655,16 @@ class DINOv2():
             self.encoder = DDP(self.encoder, device_ids=[self.rank], output_device=self.rank)
             self.projection_head_cls = DDP(self.projection_head_cls, device_ids=[self.rank], output_device=self.rank)
             self.projection_head_patch = DDP(self.projection_head_patch, device_ids=[self.rank], output_device=self.rank)
+            for target in (self.target_encoder, self.target_projection_head_cls, self.target_projection_head_patch):
+                for value in target.state_dict().values():
+                    torch.distributed.broadcast(value, src=0)
         
         self.encoder.train()
-        self.target_encoder.train()
+        self.target_encoder.eval()
         self.projection_head_cls.train()
         self.projection_head_patch.train()
-        self.target_projection_head_cls.train()
-        self.target_projection_head_patch.train()
+        self.target_projection_head_cls.eval()
+        self.target_projection_head_patch.eval()
 
     def _load_config(self):
         self.data_datasets_path = str(self.config['data']['datasets_path'])

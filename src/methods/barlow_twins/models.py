@@ -9,6 +9,7 @@
 import torch.nn as nn
 import torchvision
 import torch
+import torch.utils.checkpoint
 
 def off_diagonal(x):
     # return a flattened view of the off-diagonal elements of a square matrix
@@ -48,10 +49,10 @@ class Model_barlow_twins(nn.Module):
             z1 = self.projector(self.backbone(y1))
             z2 = self.projector(self.backbone(y2))
         else:
-            z1 = torch.utils.checkpoint.checkpoint(self.backbone, y1)
-            z1 = torch.utils.checkpoint.checkpoint(self.projector, z1)
-            z2 = torch.utils.checkpoint.checkpoint(self.backbone, y2)
-            z2 = torch.utils.checkpoint.checkpoint(self.projector, z2)
+            z1 = torch.utils.checkpoint.checkpoint(self.backbone, y1, use_reentrant=False)
+            z1 = torch.utils.checkpoint.checkpoint(self.projector, z1, use_reentrant=False)
+            z2 = torch.utils.checkpoint.checkpoint(self.backbone, y2, use_reentrant=False)
+            z2 = torch.utils.checkpoint.checkpoint(self.projector, z2, use_reentrant=False)
 
         # empirical cross-correlation matrix
         c = self.bn(z1).T @ self.bn(z2)
